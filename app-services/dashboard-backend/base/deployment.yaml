@@ -24,11 +24,11 @@ spec:
         - name: ONPREM_GATEWAY_URL
           value: http://cluster-gateway.banking-demo.svc.cluster.local:8080
         - name: CLOUD_GATEWAY_URL
-          value: http://cloud-cluster-gateway.banking-demo.svc.cluster.local:8080
+          value: http://cloud-cluster-gateway.banking-infra.svc.cluster.local:8080
         - name: ONPREM_LEDGER_URL
           value: http://ledger-service.banking-demo.svc.cluster.local:8080
         - name: CLOUD_LEDGER_URL
-          value: http://cloud-ledger-service.banking-demo.svc.cluster.local:8080
+          value: http://cloud-ledger-service.banking-infra.svc.cluster.local:8080
         resources:
           requests:
             cpu: 100m

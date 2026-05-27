@@ -2,7 +2,7 @@ apiVersion: skupper.io/v2alpha1
 kind: Connector
 metadata:
   name: cloud-ledger-service
-  namespace: banking-demo
+  namespace: banking-infra
 spec:
   routingKey: cloud-ledger-service
   port: 8080
@@ -12,7 +12,7 @@ apiVersion: skupper.io/v2alpha1
 kind: Connector
 metadata:
   name: cloud-cluster-gateway
-  namespace: banking-demo
+  namespace: banking-infra
 spec:
   routingKey: cloud-cluster-gateway
   port: 8080
