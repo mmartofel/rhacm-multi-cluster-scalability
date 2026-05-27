@@ -45,6 +45,9 @@ spec:
           #!/bin/sh
           set -e
           echo "Cloning $(params.url) @ $(params.revision)"
+          # gp3-csi (ext4) creates lost+found on new PVCs; remove any fs
+          # artifacts so git clone finds an empty target directory
+          find "$(workspaces.output.path)" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
           git clone --depth=1 --branch "$(params.revision)" \
             "$(params.url)" "$(workspaces.output.path)"
           echo "Clone complete. Listing services/:"
