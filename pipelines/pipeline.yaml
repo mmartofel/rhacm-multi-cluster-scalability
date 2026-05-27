@@ -73,6 +73,8 @@ spec:
       steps:
       - name: buildah
         image: quay.io/buildah/stable:v1.35
+        securityContext:
+          privileged: true
         env:
         - name: STORAGE_DRIVER
           value: vfs
@@ -84,6 +86,11 @@ spec:
           SVC=$(params.service)
           IMG=$(params.image)
           SRC="$(workspaces.source.path)/services/${SVC}"
+
+          # Allow short image names (e.g. maven:3.9-*) to resolve to docker.io
+          mkdir -p /etc/containers
+          printf 'unqualified-search-registries = ["docker.io"]\n' \
+            > /etc/containers/registries.conf
 
           echo "=== Building ${SVC} → ${IMG} ==="
           buildah --storage-driver=vfs bud \

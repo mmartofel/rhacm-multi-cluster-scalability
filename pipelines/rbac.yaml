@@ -4,12 +4,12 @@ metadata:
   name: pipeline-build
   namespace: banking-build
 ---
-# anyuid SCC lets buildah run as root with --storage-driver=vfs
-# without requiring privileged: true
+# privileged SCC required for buildah to write /proc/<pid>/uid_map
+# when setting up user namespaces for OCI builds inside the cluster
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: banking-build-pipeline-anyuid
+  name: banking-build-pipeline-privileged
 subjects:
 - kind: ServiceAccount
   name: pipeline-build
@@ -17,4 +17,4 @@ subjects:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: system:openshift:scc:anyuid
+  name: system:openshift:scc:privileged
