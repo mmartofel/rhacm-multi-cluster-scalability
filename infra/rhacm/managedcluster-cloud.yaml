@@ -1,0 +1,31 @@
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  name: cloud
+  labels:
+    cloud: GCP
+    vendor: OpenShift
+    env: burst
+    region: us-central1
+spec:
+  hubAcceptsClient: true
+  leaseDurationSeconds: 60
+---
+# KlusterletAddonConfig must live in the managed-cluster namespace (cloud) on the hub.
+# bootstrap-phase0.sh pre-creates that namespace so both resources apply atomically.
+apiVersion: agent.open-cluster-management.io/v1
+kind: KlusterletAddonConfig
+metadata:
+  name: cloud
+  namespace: cloud
+spec:
+  clusterName: cloud
+  clusterNamespace: cloud
+  applicationManager:
+    enabled: true
+  certPolicyController:
+    enabled: true
+  policyController:
+    enabled: true
+  searchCollector:
+    enabled: true
