@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline-build
+  namespace: banking-build
+---
+# anyuid SCC lets buildah run as root with --storage-driver=vfs
+# without requiring privileged: true
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: banking-build-pipeline-anyuid
+subjects:
+- kind: ServiceAccount
+  name: pipeline-build
+  namespace: banking-build
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid

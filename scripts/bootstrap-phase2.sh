@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bootstrap-phase2.sh — Phase 2: application services deployment
-# Requires: Phase 1 checkpoint passed, oc CLI, podman/docker for image builds
+# Requires: Phase 1 checkpoint passed, oc CLI, quay.sh credentials
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,11 +37,97 @@ if [[ -f "$REPO_ROOT/quay.sh" ]]; then
 fi
 : "${QUAY_ORG:?Please set QUAY_ORG or source quay.sh}"
 
-# ─── Build and push images ───────────────────────────────────────────────────
-log "Step 2 — Building and pushing container images"
-info "This may take 20-40 minutes for all 7 services"
-bash "$SCRIPT_DIR/build-push-images.sh"
-ok "All images built and pushed to quay.io/$QUAY_ORG/"
+# ─── Build images via Tekton Pipelines on onprem ─────────────────────────────
+log "Step 2 — Building images via Tekton Pipelines on onprem"
+
+: "${QUAY_USER:?Please set QUAY_USER or source quay.sh}"
+: "${QUAY_TOKEN:?Please set QUAY_TOKEN or source quay.sh}"
+
+# Apply build infrastructure (idempotent)
+oc apply -f "$REPO_ROOT/pipelines/namespace.yaml" --context onprem
+oc apply -f "$REPO_ROOT/pipelines/rbac.yaml" --context onprem
+oc apply -f "$REPO_ROOT/pipelines/pipeline.yaml" --context onprem
+
+# Create quay.io push secret and link to pipeline SA
+oc create secret docker-registry quay-push-secret \
+  --docker-server=quay.io \
+  --docker-username="$QUAY_USER" \
+  --docker-password="$QUAY_TOKEN" \
+  -n banking-build --context onprem \
+  --dry-run=client -o yaml | oc apply -f - --context onprem
+
+oc secrets link pipeline-build quay-push-secret \
+  --for=mount -n banking-build --context onprem 2>/dev/null || true
+
+# Trigger one PipelineRun per service (all in parallel)
+BUILD_SERVICES=(
+  transaction-generator
+  transaction-processor
+  account-service
+  ledger-service
+  cluster-gateway
+  dashboard-backend
+  dashboard-frontend
+)
+REGISTRY="quay.io/${QUAY_ORG}"
+
+for svc in "${BUILD_SERVICES[@]}"; do
+  oc create -n banking-build --context onprem -f - <<EOF
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: build-${svc}-
+  labels:
+    banking-demo/service: ${svc}
+spec:
+  pipelineRef:
+    name: build-banking-image
+  taskRunTemplate:
+    serviceAccountName: pipeline-build
+  params:
+  - name: service
+    value: ${svc}
+  - name: image
+    value: ${REGISTRY}/banking-demo-${svc}:latest
+  workspaces:
+  - name: source
+    volumeClaimTemplate:
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi
+EOF
+  ok "PipelineRun triggered for ${svc}"
+done
+
+# Wait for all PipelineRuns to complete (up to 45 min)
+log "Waiting for all Tekton builds to complete (up to 45 min)..."
+DEADLINE=$((SECONDS + 2700))
+BUILD_DONE=0
+BUILD_FAILED=0
+while [[ $SECONDS -lt $DEADLINE ]]; do
+  BUILD_DONE=$(oc get pipelinerun -n banking-build --context onprem \
+    -l banking-demo/service \
+    -o jsonpath='{.items[?(@.status.conditions[0].status=="True")].metadata.name}' \
+    2>/dev/null | wc -w | tr -d ' ')
+  BUILD_FAILED=$(oc get pipelinerun -n banking-build --context onprem \
+    -l banking-demo/service \
+    -o jsonpath='{.items[?(@.status.conditions[0].status=="False")].metadata.name}' \
+    2>/dev/null | wc -w | tr -d ' ')
+  if [[ "$BUILD_FAILED" -gt 0 ]]; then
+    fail "$BUILD_FAILED PipelineRun(s) failed — run: oc get pipelinerun -n banking-build --context onprem"
+  fi
+  if [[ "$BUILD_DONE" -eq "${#BUILD_SERVICES[@]}" ]]; then
+    break
+  fi
+  info "Builds: $BUILD_DONE/${#BUILD_SERVICES[@]} done..."
+  sleep 30
+done
+if [[ "$BUILD_DONE" -lt "${#BUILD_SERVICES[@]}" ]]; then
+  fail "Build timeout — $BUILD_DONE/${#BUILD_SERVICES[@]} completed. Check: oc get pipelinerun -n banking-build --context onprem"
+fi
+ok "All 7 images built and pushed to quay.io/$QUAY_ORG/ via Tekton"
 
 # ─── Apply Skupper extensions ────────────────────────────────────────────────
 log "Step 3 — Applying Skupper connector/listener extensions (apicurio-registry + cloud reverse access)"

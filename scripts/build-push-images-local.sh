@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# build-push-images.sh — Build and push all 7 banking-demo service images to quay.io
+# build-push-images-local.sh — Fallback: local build requiring podman/docker.
+# Prefer bootstrap-phase2.sh which uses Tekton Pipelines on the onprem cluster.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

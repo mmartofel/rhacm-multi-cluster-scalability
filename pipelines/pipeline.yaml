@@ -1,0 +1,98 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: build-banking-image
+  namespace: banking-build
+spec:
+  params:
+  - name: service
+    type: string
+    description: "Service directory name under services/ (e.g. transaction-generator)"
+  - name: image
+    type: string
+    description: "Full image reference to build and push (e.g. quay.io/mmartofe/banking-demo-foo:latest)"
+  - name: git-url
+    type: string
+    default: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
+  - name: git-revision
+    type: string
+    default: main
+
+  workspaces:
+  - name: source
+
+  tasks:
+  # ── Step 1: clone repository ─────────────────────────────────────────────
+  - name: clone
+    workspaces:
+    - name: output
+      workspace: source
+    params:
+    - name: url
+      value: $(params.git-url)
+    - name: revision
+      value: $(params.git-revision)
+    taskSpec:
+      params:
+      - name: url
+      - name: revision
+      workspaces:
+      - name: output
+      steps:
+      - name: git-clone
+        image: alpine/git:2.43.0
+        script: |
+          #!/bin/sh
+          set -e
+          echo "Cloning $(params.url) @ $(params.revision)"
+          git clone --depth=1 --branch "$(params.revision)" \
+            "$(params.url)" "$(workspaces.output.path)"
+          echo "Clone complete. Listing services/:"
+          ls "$(workspaces.output.path)/services/"
+
+  # ── Step 2: buildah build + push ─────────────────────────────────────────
+  - name: build-push
+    runAfter: [clone]
+    workspaces:
+    - name: source
+      workspace: source
+    params:
+    - name: service
+      value: $(params.service)
+    - name: image
+      value: $(params.image)
+    taskSpec:
+      params:
+      - name: service
+      - name: image
+      workspaces:
+      - name: source
+      steps:
+      - name: buildah
+        image: quay.io/buildah/stable:v1.35
+        env:
+        - name: STORAGE_DRIVER
+          value: vfs
+        # quay.io credentials are mounted via the linked Secret on the
+        # pipeline-build ServiceAccount (auth.json written by buildah login)
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          SVC=$(params.service)
+          IMG=$(params.image)
+          SRC="$(workspaces.source.path)/services/${SVC}"
+
+          echo "=== Building ${SVC} → ${IMG} ==="
+          buildah --storage-driver=vfs bud \
+            --platform linux/amd64 \
+            --layers=false \
+            -f "${SRC}/Dockerfile" \
+            -t "${IMG}" \
+            "${SRC}"
+
+          echo "=== Pushing ${IMG} ==="
+          buildah --storage-driver=vfs push \
+            --digestfile=/tmp/digest.txt \
+            "${IMG}"
+
+          echo "=== Done: $(cat /tmp/digest.txt) ==="
