@@ -1,0 +1,34 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: controller
+  namespace: banking-infra
+  labels:
+    strimzi.io/cluster: banking-kafka
+spec:
+  replicas: 3
+  roles:
+  - controller
+  storage:
+    type: persistent-claim
+    size: 5Gi
+    deleteClaim: false
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: broker
+  namespace: banking-infra
+  labels:
+    strimzi.io/cluster: banking-kafka
+spec:
+  replicas: 3
+  roles:
+  - broker
+  storage:
+    type: jbod
+    volumes:
+    - id: 0
+      type: persistent-claim
+      size: 20Gi
+      deleteClaim: false

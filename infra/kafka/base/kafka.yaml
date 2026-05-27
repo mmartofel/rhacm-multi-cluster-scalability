@@ -3,10 +3,12 @@ kind: Kafka
 metadata:
   name: banking-kafka
   namespace: banking-infra
+  annotations:
+    strimzi.io/node-pools: enabled
+    strimzi.io/kraft: enabled
 spec:
   kafka:
-    version: 3.7.0
-    replicas: 3
+    version: 4.2.0
     listeners:
     - name: plain
       port: 9092
@@ -22,19 +24,6 @@ spec:
       transaction.state.log.min.isr: "2"
       default.replication.factor: "3"
       min.insync.replicas: "2"
-    storage:
-      type: jbod
-      volumes:
-      - id: 0
-        type: persistent-claim
-        size: 20Gi
-        deleteClaim: false
-  zookeeper:
-    replicas: 3
-    storage:
-      type: persistent-claim
-      size: 5Gi
-      deleteClaim: false
   entityOperator:
     topicOperator: {}
     userOperator: {}
