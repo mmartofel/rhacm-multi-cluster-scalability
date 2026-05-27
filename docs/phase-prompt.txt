@@ -1,0 +1,9 @@
+Context: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git repo. Phase 0 checkpoint passed.
+Cluster contexts: 'onprem' (AWS OCP 4.21+), 'cloud' (GCP OCP 4.21+).
+Image registry: quay.io/$QUAY_ORG/banking-demo-<service>:latest
+Cross-cluster networking: Skupper (not Submariner).
+Storage: use default storage class on both clusters — do not pin SC names.
+All operator subscriptions confirmed present.
+
+Implement Phase 1 as specified in the implementation plan.
+Stop at Phase 1 checkpoint criteria and report status.

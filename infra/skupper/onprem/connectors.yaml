@@ -1,0 +1,19 @@
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: kafka-bootstrap
+  namespace: banking-infra
+spec:
+  routingKey: kafka-bootstrap
+  port: 9092
+  host: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local
+---
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: postgresql-primary
+  namespace: banking-infra
+spec:
+  routingKey: postgresql-primary
+  port: 5432
+  host: postgres-primary.banking-infra.svc.cluster.local

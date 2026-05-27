@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: banking-mirrormaker2
+  namespace: openshift-gitops
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: cloud
+        server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+  template:
+    metadata:
+      name: banking-mirrormaker2
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
+        targetRevision: HEAD
+        path: infra/mirrormaker2
+      destination:
+        server: '{{server}}'
+        namespace: banking-infra
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=false

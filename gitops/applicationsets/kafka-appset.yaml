@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: banking-kafka
+  namespace: openshift-gitops
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: onprem
+        server: https://kubernetes.default.svc
+        overlay: onprem
+      - cluster: cloud
+        server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+        overlay: cloud
+  template:
+    metadata:
+      name: 'banking-kafka-{{cluster}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
+        targetRevision: HEAD
+        path: 'infra/kafka/overlays/{{overlay}}'
+      destination:
+        server: '{{server}}'
+        namespace: banking-infra
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=false

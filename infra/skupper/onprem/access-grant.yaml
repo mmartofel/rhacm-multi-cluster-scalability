@@ -1,0 +1,8 @@
+apiVersion: skupper.io/v2alpha1
+kind: AccessGrant
+metadata:
+  name: cloud-link-grant
+  namespace: banking-infra
+spec:
+  redemptionsAllowed: 1
+  expirationWindow: 24h

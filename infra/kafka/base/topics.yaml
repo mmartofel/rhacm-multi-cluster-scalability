@@ -1,0 +1,41 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: transactions-raw
+  namespace: banking-infra
+  labels:
+    strimzi.io/cluster: banking-kafka
+spec:
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: "86400000"
+    min.insync.replicas: "2"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: transactions-committed
+  namespace: banking-infra
+  labels:
+    strimzi.io/cluster: banking-kafka
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: "86400000"
+    min.insync.replicas: "2"
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: transactions-dlq
+  namespace: banking-infra
+  labels:
+    strimzi.io/cluster: banking-kafka
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: "604800000"
+    min.insync.replicas: "2"

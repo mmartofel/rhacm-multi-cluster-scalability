@@ -1,0 +1,20 @@
+# GCP: single standby instance — will be promoted to streaming replica
+# after Skupper link is established and pgBackRest stanza is initialized.
+# The bootstrap-phase1.sh script enables standby mode once the link is verified.
+apiVersion: postgres-operator.crunchydata.com/v1beta1
+kind: PostgresCluster
+metadata:
+  name: postgres
+  namespace: banking-infra
+spec:
+  instances:
+  - name: instance1
+    replicas: 1
+    dataVolumeClaimSpec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+  proxy:
+    pgBouncer:
+      replicas: 1

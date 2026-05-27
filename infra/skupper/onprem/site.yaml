@@ -1,0 +1,7 @@
+apiVersion: skupper.io/v2alpha1
+kind: Site
+metadata:
+  name: banking-onprem
+  namespace: banking-infra
+spec:
+  linkAccess: default

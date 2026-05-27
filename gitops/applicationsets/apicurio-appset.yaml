@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: banking-apicurio
+  namespace: openshift-gitops
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: onprem
+        server: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: banking-apicurio
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
+        targetRevision: HEAD
+        path: infra/apicurio
+      destination:
+        server: '{{server}}'
+        namespace: banking-infra
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=false
