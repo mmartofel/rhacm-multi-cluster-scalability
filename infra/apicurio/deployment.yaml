@@ -17,16 +17,14 @@ spec:
     spec:
       containers:
       - name: apicurio-registry
-        image: quay.io/apicurio/apicurio-registry-kafkasql:2.6.4.Final
+        image: quay.io/apicurio/apicurio-registry-kafkasql:2.5.11.Final
         ports:
         - name: http
           containerPort: 8080
           protocol: TCP
         env:
-        - name: KAFKA_BOOTSTRAP_SERVERS
+        - name: APICURIO_KAFKASQL_BOOTSTRAP_SERVERS
           value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
-        - name: QUARKUS_PROFILE
-          value: prod
         readinessProbe:
           httpGet:
             path: /health/ready
