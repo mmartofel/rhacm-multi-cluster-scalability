@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "TransactionCommitted",
+  "namespace": "com.redhat.banking",
+  "fields": [
+    {"name": "transactionId",  "type": "string"},
+    {"name": "accountId",      "type": "string"},
+    {"name": "balanceAfter",   "type": "double"},
+    {"name": "processedAt",    "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "sourceCluster",  "type": "string"}
+  ]
+}

@@ -17,3 +17,13 @@ spec:
   routingKey: postgresql-primary
   port: 5432
   host: postgresql-primary
+---
+apiVersion: skupper.io/v2alpha1
+kind: Listener
+metadata:
+  name: apicurio-registry
+  namespace: banking-infra
+spec:
+  routingKey: apicurio-registry
+  port: 8080
+  host: apicurio-registry

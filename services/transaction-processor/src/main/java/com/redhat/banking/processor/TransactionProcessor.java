@@ -1,0 +1,73 @@
+package com.redhat.banking.processor;
+
+import com.redhat.banking.TransactionCommitted;
+import com.redhat.banking.TransactionEvent;
+import com.redhat.banking.TransactionType;
+import io.quarkus.logging.Log;
+import io.smallrye.reactive.messaging.annotations.Blocking;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.reactive.messaging.Channel;
+import org.eclipse.microprofile.reactive.messaging.Emitter;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Map;
+
+@ApplicationScoped
+public class TransactionProcessor {
+
+    @Inject
+    @RestClient
+    AccountServiceClient accountClient;
+
+    @Inject
+    @Channel("transactions-committed-out")
+    Emitter<TransactionCommitted> committedEmitter;
+
+    private final String sourceCluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
+
+    @Incoming("transactions-in")
+    @Blocking
+    @Transactional
+    public void process(TransactionEvent event) {
+        double delta = event.getType() == TransactionType.DEBIT
+                ? -event.getAmount()
+                : event.getAmount();
+
+        ApplyResponse response;
+        try {
+            response = accountClient.applyDelta(event.getAccountId(), Map.of("delta", delta));
+        } catch (Exception e) {
+            Log.errorf("Failed to apply balance for account %s: %s", event.getAccountId(), e.getMessage());
+            return;
+        }
+
+        if (!response.success) {
+            Log.warnf("Transaction %s rejected: %s", event.getTransactionId(), response.reason);
+            return;
+        }
+
+        Transaction tx = new Transaction();
+        tx.transactionId = event.getTransactionId();
+        tx.accountId = event.getAccountId();
+        tx.type = event.getType().name();
+        tx.amount = BigDecimal.valueOf(event.getAmount());
+        tx.balanceAfter = BigDecimal.valueOf(response.newBalance);
+        tx.processedAt = Instant.ofEpochMilli(event.getTimestamp());
+        tx.sourceCluster = sourceCluster;
+        tx.persist();
+
+        TransactionCommitted committed = TransactionCommitted.newBuilder()
+                .setTransactionId(event.getTransactionId())
+                .setAccountId(event.getAccountId())
+                .setBalanceAfter(response.newBalance)
+                .setProcessedAt(Instant.now().toEpochMilli())
+                .setSourceCluster(sourceCluster)
+                .build();
+        committedEmitter.send(committed);
+    }
+}

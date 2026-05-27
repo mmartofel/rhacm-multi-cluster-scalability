@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-frontend
+  namespace: banking-demo
+  labels:
+    app: dashboard-frontend
+spec:
+  selector:
+    app: dashboard-frontend
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080

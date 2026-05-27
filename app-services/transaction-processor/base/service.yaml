@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-processor
+  namespace: banking-demo
+  labels:
+    app: transaction-processor
+spec:
+  selector:
+    app: transaction-processor
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080

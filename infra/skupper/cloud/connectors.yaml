@@ -1,0 +1,19 @@
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: cloud-ledger-service
+  namespace: banking-demo
+spec:
+  routingKey: cloud-ledger-service
+  port: 8080
+  host: ledger-service.banking-demo.svc.cluster.local
+---
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: cloud-cluster-gateway
+  namespace: banking-demo
+spec:
+  routingKey: cloud-cluster-gateway
+  port: 8080
+  host: cluster-gateway.banking-demo.svc.cluster.local

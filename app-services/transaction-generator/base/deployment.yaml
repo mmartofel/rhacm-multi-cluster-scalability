@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-generator
+  namespace: banking-demo
+  labels:
+    app: transaction-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transaction-generator
+  template:
+    metadata:
+      labels:
+        app: transaction-generator
+    spec:
+      containers:
+      - name: transaction-generator
+        image: quay.io/mmartofe/banking-demo-transaction-generator:latest
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: transaction-generator-config
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
+        - name: APICURIO_URL
+          value: http://apicurio-registry.banking-infra.svc.cluster.local:8080
+        - name: SOURCE_CLUSTER
+          value: onprem
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+      imagePullSecrets:
+      - name: quay-pull-secret

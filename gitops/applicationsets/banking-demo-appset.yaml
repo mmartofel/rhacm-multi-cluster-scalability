@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: banking-demo-apps
+  namespace: openshift-gitops
+spec:
+  generators:
+  # Services deployed to BOTH clusters (with per-cluster overlays)
+  - matrix:
+      generators:
+      - list:
+          elements:
+          - service: transaction-generator
+          - service: transaction-processor
+          - service: account-service
+          - service: ledger-service
+          - service: cluster-gateway
+      - list:
+          elements:
+          - cluster: onprem
+            server: https://kubernetes.default.svc
+            overlay: onprem
+          - cluster: cloud
+            server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+            overlay: cloud
+  # onprem-only services (no cloud deployment)
+  - list:
+      elements:
+      - service: dashboard-backend
+        cluster: onprem
+        server: https://kubernetes.default.svc
+        overlay: base
+      - service: dashboard-frontend
+        cluster: onprem
+        server: https://kubernetes.default.svc
+        overlay: base
+  template:
+    metadata:
+      name: 'banking-{{service}}-{{cluster}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
+        targetRevision: HEAD
+        path: 'app-services/{{service}}/{{overlay}}'
+      destination:
+        server: '{{server}}'
+        namespace: banking-demo
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=false

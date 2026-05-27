@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+patches:
+- patch: |-
+    - op: replace
+      path: /spec/replicas
+      value: 1
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: "jdbc:postgresql://postgresql-primary.banking-infra.svc.cluster.local:5432/postgres"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/3/value
+      value: "cloud"
+  target:
+    kind: Deployment
+    name: account-service
+- patch: |-
+    - op: replace
+      path: /spec/minReplicas
+      value: 1
+    - op: replace
+      path: /spec/maxReplicas
+      value: 5
+  target:
+    kind: HorizontalPodAutoscaler
+    name: account-service

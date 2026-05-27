@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "TransactionEvent",
+  "namespace": "com.redhat.banking",
+  "fields": [
+    {"name": "transactionId", "type": "string"},
+    {"name": "accountId",     "type": "string"},
+    {
+      "name": "type",
+      "type": {
+        "type": "enum",
+        "name": "TransactionType",
+        "symbols": ["DEBIT", "CREDIT"]
+      }
+    },
+    {"name": "amount",    "type": "double"},
+    {"name": "timestamp", "type": {"type": "long", "logicalType": "timestamp-millis"}}
+  ]
+}

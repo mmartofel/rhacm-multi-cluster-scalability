@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: account-service
+  namespace: banking-demo
+  labels:
+    app: account-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: account-service
+  template:
+    metadata:
+      labels:
+        app: account-service
+    spec:
+      containers:
+      - name: account-service
+        image: quay.io/mmartofe/banking-demo-account-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DATASOURCE_URL
+          value: jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres
+        - name: DATASOURCE_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-credentials
+              key: user
+        - name: DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-credentials
+              key: password
+        - name: SOURCE_CLUSTER
+          value: onprem
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+      imagePullSecrets:
+      - name: quay-pull-secret

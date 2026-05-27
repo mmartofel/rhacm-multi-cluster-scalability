@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-gateway
+  namespace: banking-demo
+  labels:
+    app: cluster-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cluster-gateway
+  template:
+    metadata:
+      labels:
+        app: cluster-gateway
+    spec:
+      containers:
+      - name: cluster-gateway
+        image: quay.io/mmartofe/banking-demo-cluster-gateway:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SOURCE_CLUSTER
+          value: onprem
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 25
+          periodSeconds: 15
+      imagePullSecrets:
+      - name: quay-pull-secret

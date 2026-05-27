@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-processor
+  namespace: banking-demo
+  labels:
+    app: transaction-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: transaction-processor
+  template:
+    metadata:
+      labels:
+        app: transaction-processor
+    spec:
+      containers:
+      - name: transaction-processor
+        image: quay.io/mmartofe/banking-demo-transaction-processor:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
+        - name: APICURIO_URL
+          value: http://apicurio-registry.banking-infra.svc.cluster.local:8080
+        - name: SOURCE_CLUSTER
+          value: onprem
+        - name: ACCOUNT_SERVICE_URL
+          value: http://account-service.banking-demo.svc.cluster.local:8080
+        - name: DATASOURCE_URL
+          value: jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres
+        - name: DATASOURCE_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-credentials
+              key: user
+        - name: DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-credentials
+              key: password
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 15
+      imagePullSecrets:
+      - name: quay-pull-secret

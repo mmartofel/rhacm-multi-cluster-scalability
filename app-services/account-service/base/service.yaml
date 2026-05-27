@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: account-service
+  namespace: banking-demo
+  labels:
+    app: account-service
+spec:
+  selector:
+    app: account-service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080

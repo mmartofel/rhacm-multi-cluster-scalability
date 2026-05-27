@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+patches:
+- patch: |-
+    - op: replace
+      path: /spec/template/spec/containers/0/env/0/value
+      value: "kafka-bootstrap.banking-infra.svc.cluster.local:9092"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/1/value
+      value: "http://apicurio-registry.banking-infra.svc.cluster.local:8080"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/2/value
+      value: "cloud"
+  target:
+    kind: Deployment
+    name: transaction-generator
+- patch: |-
+    - op: replace
+      path: /data/TPS_RATE
+      value: "50"
+  target:
+    kind: ConfigMap
+    name: transaction-generator-config
