@@ -4,26 +4,16 @@ metadata:
   name: banking-mirror
   namespace: banking-infra
 spec:
-  version: 3.7.0
+  version: 4.2.0
   replicas: 1
-  connectCluster: cloud
-  clusters:
-  - alias: onprem
-    bootstrapServers: kafka-bootstrap:9092
-  - alias: cloud
+  target:
     bootstrapServers: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
   mirrors:
-  - sourceCluster: onprem
-    targetCluster: cloud
+  - source:
+      bootstrapServers: kafka-bootstrap:9092
+    topicsPattern: "transactions-.*"
     sourceConnector:
       config:
         replication.factor: "3"
         offset-syncs.topic.replication.factor: "3"
         sync.topic.acls.enabled: "false"
-    heartbeatConnector:
-      config:
-        heartbeats.topic.replication.factor: "3"
-    checkpointConnector:
-      config:
-        checkpoints.topic.replication.factor: "3"
-    topicsPattern: "transactions-.*"
