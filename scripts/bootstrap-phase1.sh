@@ -188,7 +188,10 @@ GRANT_CODE=$(oc --context "${ONPREM}" get accessgrant cloud-link-grant \
 GRANT_CA=$(oc --context "${ONPREM}" get accessgrant cloud-link-grant \
   -n "${INFRA_NS}" -o jsonpath='{.status.ca}')
 
-oc --context "${CLOUD}" apply -n "${INFRA_NS}" -f - <<EOF
+# Write to temp file: GRANT_CA is a PEM cert whose "-----END CERTIFICATE-----"
+# lines start with dashes that YAML parses as document separators in a heredoc.
+_TMPTOKEN=$(mktemp /tmp/skupper-token.XXXXXX.yaml)
+cat > "${_TMPTOKEN}" <<YAMLEOF
 apiVersion: skupper.io/v2alpha1
 kind: AccessToken
 metadata:
@@ -197,8 +200,11 @@ metadata:
 spec:
   url: "${GRANT_URL}"
   code: "${GRANT_CODE}"
-  ca: "${GRANT_CA}"
-EOF
+  ca: |
+$(printf '%s\n' "${GRANT_CA}" | sed 's/^/    /')
+YAMLEOF
+oc --context "${CLOUD}" apply -f "${_TMPTOKEN}" -n "${INFRA_NS}"
+rm -f "${_TMPTOKEN}"
 ok "AccessToken applied on cloud"
 
 printf 'Waiting for Skupper link to be established'
