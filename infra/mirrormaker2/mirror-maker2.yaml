@@ -7,9 +7,19 @@ spec:
   version: 4.2.0
   replicas: 1
   target:
+    alias: cloud
     bootstrapServers: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
+    groupId: banking-mirror-connect
+    configStorageTopic: mm2-configs
+    offsetStorageTopic: mm2-offsets
+    statusStorageTopic: mm2-status
+    config:
+      config.storage.replication.factor: "3"
+      offset.storage.replication.factor: "3"
+      status.storage.replication.factor: "3"
   mirrors:
   - source:
+      alias: onprem
       bootstrapServers: kafka-bootstrap:9092
     topicsPattern: "transactions-.*"
     sourceConnector:
@@ -17,3 +27,5 @@ spec:
         replication.factor: "3"
         offset-syncs.topic.replication.factor: "3"
         sync.topic.acls.enabled: "false"
+        # Keep original topic names on cloud (no onprem. prefix)
+        replication.policy.class: org.apache.kafka.connect.mirror.IdentityReplicationPolicy
