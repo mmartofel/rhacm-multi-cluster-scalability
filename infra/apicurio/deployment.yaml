@@ -25,6 +25,8 @@ spec:
         env:
         - name: APICURIO_KAFKASQL_BOOTSTRAP_SERVERS
           value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
         readinessProbe:
           httpGet:
             path: /health/ready
