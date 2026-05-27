@@ -58,12 +58,12 @@ C4Container
     Container(dash_be, "dashboard-backend", "Quarkus 3 WebSocket", "Polls both clusters every 500ms. Aggregates and streams MetricsPayload.")
     Container(dash_fe, "dashboard-frontend", "React 18 + Patternfly 5", "Live dashboard: cluster map, TPS gauges, chaos panel, compliance widget.")
 
-    ContainerDb(kafka_aws, "Streams for Apache Kafka", "Kafka 3 — 3 brokers", "Topics: transactions-raw, transactions-committed, transactions-dlq")
+    ContainerDb(kafka_aws, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Topics: transactions-raw, transactions-committed, transactions-dlq")
     ContainerDb(pg_aws, "PostgreSQL Primary", "Crunchy Postgres for Kubernetes v5", "Accounts + transactions tables. EBS-backed PVC. PgBouncer pooling.")
     Container(mm2, "MirrorMaker 2", "Streams for Apache Kafka", "Replicates transactions-raw AWS → GCP via RHSI virtual service")
     Container(apicurio, "Apicurio Registry", "Apicurio 2.x", "Avro schema registry. Enforces backward compatibility.")
     Container(skupper_aws, "RHSI Router", "Red Hat Service Interconnect 2", "L7 AMQP router. Issues link token. Exposes kafka-bootstrap, postgresql-primary as virtual services.")
-    Container(rhacm, "RHACM Hub", "RHACM 2.12+", "Manages both clusters. Placement policies. Observability federation. Governance.")
+    Container(rhacm, "RHACM Hub", "RHACM 2.16+", "Manages both clusters. Placement policies. Observability federation. Governance.")
     Container(argocd, "Argo CD", "OpenShift GitOps 1.13+", "ApplicationSets deploy all services to both clusters via Kustomize overlays.")
     Container(ossm_aws, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker, VirtualService for AWS workloads.")
   }
@@ -75,7 +75,7 @@ C4Container
     Container(acct_gcp, "account-service", "Quarkus 3 REST", "@CacheResult in-process cache. 0–5 replicas via HPA.")
     Container(ledger_gcp, "ledger-service", "Quarkus 3 REST", "Read-only from PostgreSQL standby. Serves GCP-local latency reads.")
 
-    ContainerDb(kafka_gcp, "Streams for Apache Kafka", "Kafka 3 — 3 brokers", "Receives replicated topics from AWS via MirrorMaker 2.")
+    ContainerDb(kafka_gcp, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Receives replicated topics from AWS via MirrorMaker 2.")
     ContainerDb(pg_gcp, "PostgreSQL Standby", "Crunchy Postgres for Kubernetes v5", "Streaming replica from AWS primary. Read-only. PD-backed PVC.")
     Container(skupper_gcp, "RHSI Router", "Red Hat Service Interconnect 2", "Consumes link token from AWS. Provides virtual services: kafka-bootstrap, postgresql-primary.")
     Container(ossm_gcp, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker for GCP workloads.")
@@ -116,8 +116,8 @@ C4Container
   Rel(skupper_aws, skupper_gcp, "mTLS router link", "HTTPS — AMQP over TLS")
 
   Rel(argocd, git, "Watches for changes", "git poll / webhook")
-  Rel(argocd, aws_cluster, "Deploys via Kustomize", "kubectl apply")
-  Rel(argocd, gcp_cluster, "Deploys via Kustomize", "kubectl apply")
+  Rel(argocd, aws_cluster, "Deploys via Kustomize", "oc apply")
+  Rel(argocd, gcp_cluster, "Deploys via Kustomize", "oc apply")
 
   Rel(gen_aws, apicurio, "Fetches Avro schema", "HTTPS")
   Rel(gen_gcp, apicurio, "Fetches Avro schema", "HTTPS via RHSI")
@@ -141,10 +141,10 @@ C4Deployment
     Deployment_Node(aws_ocp, "OpenShift 4.21+ Self-Managed", "3× control plane EC2  |  3–6× worker EC2  |  Default storage class: AWS EBS (gp2/gp3)") {
 
       Deployment_Node(ns_infra_aws, "Namespace: banking-infra") {
-        Container(kafka_aws_d, "Streams for Apache Kafka", "3 Kafka broker pods  |  3 ZooKeeper pods  |  PVC: EBS default SC")
+        Container(kafka_aws_d, "Streams for Apache Kafka", "KRaft mode  |  3 controller pods (5Gi PVC)  |  3 broker pods (20Gi PVC)  |  Default SC: EBS")
         Container(mm2_d, "MirrorMaker 2", "1–2 pods  |  Replicates to GCP via RHSI")
         Container(pg_aws_d, "PostgreSQL Primary", "3-node HA  |  PgBouncer sidecar  |  PVC: EBS default SC")
-        Container(apicurio_d, "Apicurio Registry", "2 pods  |  PostgreSQL-backed")
+        Container(apicurio_d, "Apicurio Registry", "1 pod  |  kafkasql-backed (2.5.11.Final)")
         Container(skupper_aws_d, "RHSI Router", "1 pod  |  Exposes 2 virtual services  |  Route: skupper.apps.<aws-domain>")
       }
 
@@ -174,7 +174,7 @@ C4Deployment
     Deployment_Node(gcp_ocp, "OpenShift 4.21+ Self-Managed", "3× control plane GCE  |  0–8× worker GCE (elastic)  |  Default storage class: GCP PD (standard/ssd)") {
 
       Deployment_Node(ns_infra_gcp, "Namespace: banking-infra") {
-        Container(kafka_gcp_d, "Streams for Apache Kafka — Replica", "3 Kafka broker pods  |  PVC: GCP PD default SC  |  Receives MM2 replication from AWS")
+        Container(kafka_gcp_d, "Streams for Apache Kafka — Replica", "KRaft mode  |  3 controller pods (5Gi PVC)  |  3 broker pods (20Gi PVC)  |  Default SC: GCP PD  |  Receives MM2 replication from AWS")
         Container(pg_gcp_d, "PostgreSQL Standby", "1 standby pod  |  PgBouncer sidecar  |  PVC: GCP PD default SC  |  Streaming replica from AWS primary")
         Container(skupper_gcp_d, "RHSI Router", "1 pod  |  Consumes link token from AWS  |  Tunnels to AWS: kafka:9092, pg:5432")
       }
@@ -204,8 +204,8 @@ C4Deployment
   Rel(mm2_d, kafka_gcp_d, "Replicates topics", "Via RHSI virtual service → kafka-bootstrap GCP")
   Rel(proc_gcp_d, pg_aws_d, "Writes committed transactions", "JDBC → RHSI → AWS PgBouncer → PostgreSQL primary")
   Rel(rhacm_d, gcp_ocp, "Manages spoke cluster", "HTTPS — klusterlet")
-  Rel(argocd_d, ns_demo_aws, "Deploys onprem overlay", "kubectl — Kustomize")
-  Rel(argocd_d, ns_demo_gcp, "Deploys cloud overlay", "kubectl — Kustomize")
+  Rel(argocd_d, ns_demo_aws, "Deploys onprem overlay", "oc — Kustomize")
+  Rel(argocd_d, ns_demo_gcp, "Deploys cloud overlay", "oc — Kustomize")
   Rel(argocd_d, git_d, "Watches repo", "git poll / webhook")
   Rel(aws_ocp, quay_d, "Pulls images", "HTTPS")
   Rel(gcp_ocp, quay_d, "Pulls images", "HTTPS")
