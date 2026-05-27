@@ -10,6 +10,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Message;
+import org.eclipse.microprofile.reactive.messaging.Metadata;
 
 import java.time.Instant;
 import java.util.Random;
@@ -54,14 +55,13 @@ public class TransactionGeneratorService {
                     .setAccountId(accountId)
                     .setType(type)
                     .setAmount(amount)
-                    .setTimestamp(Instant.now().toEpochMilli())
+                    .setTimestamp(Instant.now())
                     .build();
 
-            emitter.send(Message.of(event,
+            emitter.send(Message.of(event, Metadata.of(
                     OutgoingKafkaRecordMetadata.<String>builder()
                             .withKey(accountId)
-                            .build()
-                            .getMetadata()));
+                            .build())));
             generated.incrementAndGet();
         }
     }

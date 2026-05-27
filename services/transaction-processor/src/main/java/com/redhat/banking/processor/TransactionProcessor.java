@@ -57,7 +57,7 @@ public class TransactionProcessor {
         tx.type = event.getType().name();
         tx.amount = BigDecimal.valueOf(event.getAmount());
         tx.balanceAfter = BigDecimal.valueOf(response.newBalance);
-        tx.processedAt = Instant.ofEpochMilli(event.getTimestamp());
+        tx.processedAt = event.getTimestamp();
         tx.sourceCluster = sourceCluster;
         tx.persist();
 
@@ -65,7 +65,7 @@ public class TransactionProcessor {
                 .setTransactionId(event.getTransactionId())
                 .setAccountId(event.getAccountId())
                 .setBalanceAfter(response.newBalance)
-                .setProcessedAt(Instant.now().toEpochMilli())
+                .setProcessedAt(Instant.now())
                 .setSourceCluster(sourceCluster)
                 .build();
         committedEmitter.send(committed);

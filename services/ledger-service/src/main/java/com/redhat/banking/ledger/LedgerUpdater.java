@@ -23,7 +23,7 @@ public class LedgerUpdater {
         LedgerEntry entry = new LedgerEntry();
         entry.accountId = event.getAccountId();
         entry.runningBalance = BigDecimal.valueOf(event.getBalanceAfter());
-        entry.asOf = Instant.ofEpochMilli(event.getProcessedAt());
+        entry.asOf = event.getProcessedAt();
         entry.sourceCluster = event.getSourceCluster();
         entry.persist();
         processedCount.incrementAndGet();
