@@ -7,6 +7,7 @@ import io.quarkus.logging.Log;
 import io.smallrye.reactive.messaging.annotations.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
@@ -27,6 +28,9 @@ public class TransactionProcessor {
     @Inject
     @Channel("transactions-committed-out")
     Emitter<TransactionCommitted> committedEmitter;
+
+    @Inject
+    EntityManager em;
 
     private final String sourceCluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
 
@@ -51,20 +55,22 @@ public class TransactionProcessor {
             return;
         }
 
-        if (Transaction.findById(event.getTransactionId()) != null) {
-            Log.infof("Transaction %s already processed (idempotent skip)", event.getTransactionId());
+        int inserted = em.createNativeQuery(
+                "INSERT INTO transactions (transaction_id, account_id, type, amount, balance_after, processed_at, source_cluster) " +
+                "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (transaction_id) DO NOTHING")
+                .setParameter(1, event.getTransactionId())
+                .setParameter(2, event.getAccountId())
+                .setParameter(3, event.getType().name())
+                .setParameter(4, BigDecimal.valueOf(event.getAmount()))
+                .setParameter(5, BigDecimal.valueOf(response.newBalance))
+                .setParameter(6, event.getTimestamp())
+                .setParameter(7, sourceCluster)
+                .executeUpdate();
+
+        if (inserted == 0) {
+            Log.debugf("Transaction %s already committed (idempotent skip)", event.getTransactionId());
             return;
         }
-
-        Transaction tx = new Transaction();
-        tx.transactionId = event.getTransactionId();
-        tx.accountId = event.getAccountId();
-        tx.type = event.getType().name();
-        tx.amount = BigDecimal.valueOf(event.getAmount());
-        tx.balanceAfter = BigDecimal.valueOf(response.newBalance);
-        tx.processedAt = event.getTimestamp();
-        tx.sourceCluster = sourceCluster;
-        tx.persist();
 
         TransactionCommitted committed = TransactionCommitted.newBuilder()
                 .setTransactionId(event.getTransactionId())
