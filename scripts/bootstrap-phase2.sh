@@ -380,13 +380,13 @@ check() {
 # Onprem pods
 for dep in "${ONPREM_DEPLOYMENTS[@]}"; do
   check "onprem: $dep running" \
-    "oc get deployment $dep -n banking-demo --context onprem -o jsonpath='{.status.readyReplicas}' | grep -qP '[1-9]'"
+    "oc get deployment $dep -n banking-demo --context onprem -o jsonpath='{.status.readyReplicas}' | grep -qE '[1-9]'"
 done
 
 # Cloud pods
 for dep in "${CLOUD_DEPLOYMENTS[@]}"; do
   check "cloud: $dep running" \
-    "oc get deployment $dep -n banking-demo --context cloud -o jsonpath='{.status.readyReplicas}' | grep -qP '[1-9]'"
+    "oc get deployment $dep -n banking-demo --context cloud -o jsonpath='{.status.readyReplicas}' | grep -qE '[1-9]'"
 done
 
 # KEDA ScaledObjects
@@ -402,7 +402,7 @@ check "dashboard Route accessible (HTTP 200/302)" \
 
 # PostgreSQL has rows
 check "PostgreSQL: transactions table has rows" \
-  "oc exec -n banking-infra --context onprem $PG_POD -- psql -U postgres postgres -t -c 'SELECT COUNT(*) FROM transactions' 2>/dev/null | grep -qP '[1-9]'"
+  "oc exec -n banking-infra --context onprem $PG_POD -- psql -U postgres postgres -t -c 'SELECT COUNT(*) FROM transactions' 2>/dev/null | grep -qE '[1-9]'"
 
 echo ""
 echo "─────────────────────────────────────────────────────"
