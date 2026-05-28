@@ -18,7 +18,7 @@ export default function AppHeader({ connected }: Props) {
         style={{ filter: 'brightness(0) invert(1)' }}
       />
       <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>
-        Banking Demo — Multi-Cluster Dashboard
+        Transactions Processing Dashboard for Multicluster
       </span>
       <span style={{
         color: connected ? '#92d400' : '#f4c145',
