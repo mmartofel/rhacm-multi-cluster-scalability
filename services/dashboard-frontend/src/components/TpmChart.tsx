@@ -1,11 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Chart, ChartArea, ChartAxis, ChartGroup, ChartVoronoiContainer } from '@patternfly/react-charts';
+import { Chart, ChartArea, ChartAxis, ChartGroup, ChartLine, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { TpmPoint } from '../App';
+import { ONPREM_CAPACITY_TPS } from '../types/metrics';
 
 interface Props { history: TpmPoint[]; }
 
 const AWS_COLOR = '#06c';
 const GCP_COLOR = '#4cb140';
+const CAPACITY_TPM = ONPREM_CAPACITY_TPS * 60;
 const DARK_AXIS = {
   axis: { stroke: '#3c3f42' },
   tickLabels: { fill: '#6a6e73', fontSize: 10 },
@@ -24,8 +26,8 @@ export default function TpmChart({ history }: Props) {
   }, []);
 
   const maxY = history.length > 0
-    ? Math.max(1, ...history.map(p => Math.max(p.onprem, p.cloud)))
-    : 1;
+    ? Math.max(CAPACITY_TPM, ...history.map(p => Math.max(p.onprem, p.cloud)))
+    : CAPACITY_TPM;
 
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px' }}>
@@ -34,6 +36,7 @@ export default function TpmChart({ history }: Props) {
         <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
           <span style={{ color: AWS_COLOR }}>■ AWS (on-prem)</span>
           <span style={{ color: GCP_COLOR }}>■ GCP (cloud burst)</span>
+          <span style={{ color: '#c9190b' }}>– – Onprem capacity ({ONPREM_CAPACITY_TPS} TPS)</span>
         </div>
       </div>
       <div ref={containerRef}>
@@ -49,7 +52,7 @@ export default function TpmChart({ history }: Props) {
             minDomain={{ y: 0 }}
             maxDomain={{ y: maxY * 1.15 }}
             domainPadding={{ y: [20, 10] }}
-            containerComponent={<ChartVoronoiContainer labels={({ datum }) => `${datum.name}: ${Math.round(datum.y)} TPM`} constrainToVisibleArea />}
+            containerComponent={<ChartVoronoiContainer labels={({ datum }) => datum.name ? `${datum.name}: ${Math.round(datum.y)} TPM` : ''} constrainToVisibleArea />}
             style={{ parent: { background: 'transparent' } }}
           >
             <ChartAxis
@@ -68,6 +71,13 @@ export default function TpmChart({ history }: Props) {
                 style={{ data: { fill: 'rgba(76,177,64,0.2)', stroke: GCP_COLOR, strokeWidth: 2 } }}
               />
             </ChartGroup>
+            <ChartLine
+              data={[
+                { x: history[0].ts, y: CAPACITY_TPM },
+                { x: history[history.length - 1].ts, y: CAPACITY_TPM },
+              ]}
+              style={{ data: { stroke: '#c9190b', strokeWidth: 1.5, strokeDasharray: '6,3' } }}
+            />
           </Chart>
         )}
       </div>

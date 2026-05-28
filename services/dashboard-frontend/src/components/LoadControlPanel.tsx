@@ -4,11 +4,11 @@ import { MetricsPayload } from '../types/metrics';
 interface Props { payload: MetricsPayload | null; }
 
 const PRESETS = [
-  { label: 'Quiet',  tps: 0,   color: '#6a6e73', description: 'Stop all transaction generation. System drains to idle.' },
-  { label: 'Low',    tps: 50,  color: '#4cb140', description: '50 TPS — light load, cloud processors may scale to 0.' },
-  { label: 'Medium', tps: 100, color: '#06c',    description: '100 TPS — baseline demo load.' },
-  { label: 'High',   tps: 300, color: '#f4c145', description: '300 TPS — forces cloud scale-out via KEDA.' },
-  { label: 'Burst',  tps: 500, color: '#c9190b', description: '500 TPS — stress test, max cloud replicas.' },
+  { label: 'Quiet',  tps: 0,   color: '#6a6e73', description: 'System idle — all processors drain, KEDA scales cloud to 0 replicas.' },
+  { label: 'Low',    tps: 50,  color: '#4cb140', description: '50 TPS — onprem at 50% capacity. Cloud stays at 0 replicas.' },
+  { label: 'Medium', tps: 100, color: '#06c',    description: '100 TPS — onprem at full capacity. Cloud burst threshold reached.' },
+  { label: 'High',   tps: 300, color: '#f4c145', description: '300 TPS — 100 TPS onprem + 200 TPS cloud burst. KEDA scales GCP pods.' },
+  { label: 'Burst',  tps: 500, color: '#c9190b', description: '500 TPS — 100 TPS onprem + 400 TPS cloud burst. Max GCP scale-out.' },
 ];
 
 export default function LoadControlPanel({ payload }: Props) {
@@ -100,10 +100,10 @@ export default function LoadControlPanel({ payload }: Props) {
       <div style={{ marginTop: 24, borderTop: '1px solid #2a2d32', paddingTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#c0c2c5', marginBottom: 12 }}>What to observe</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12, color: '#8a8d90' }}>
-          <div>■ TPM chart — both cluster lines rise and fall together</div>
-          <div>■ KPI strip — total TPM and efficiency update in real time</div>
-          <div>■ Throughput chart — gap between generator and commit lines</div>
-          <div>■ Cloud pods — KEDA scales 0→20 replicas on Burst load</div>
+          <div>■ TPM chart — red dashed line marks onprem capacity (6000 TPM)</div>
+          <div>■ KPI strip — Processing Mode switches Onprem Only → Cloud Burst</div>
+          <div>■ Throughput chart — generator line crosses the 100 TPS capacity limit</div>
+          <div>■ Cloud pods — KEDA scales 0→20 replicas once load exceeds capacity</div>
         </div>
       </div>
     </div>

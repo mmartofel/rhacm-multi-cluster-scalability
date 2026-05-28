@@ -1,5 +1,5 @@
 import React from 'react';
-import { MetricsPayload, ClusterMetrics } from '../types/metrics';
+import { MetricsPayload, ClusterMetrics, ONPREM_CAPACITY_TPS } from '../types/metrics';
 
 interface Props { payload: MetricsPayload | null; }
 
@@ -7,11 +7,17 @@ function fmt(n: number, decimals = 0) {
   return n.toLocaleString('en', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-function ClusterCard({ m }: { m: ClusterMetrics }) {
+function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
   const isOnprem = m.cluster === 'onprem';
   const label    = isOnprem ? 'AWS (on-prem)' : 'GCP (cloud burst)';
   const accent   = isOnprem ? '#06c' : '#4cb140';
   const healthColor = m.healthy ? '#92d400' : '#c9190b';
+
+  const roleBadge = isOnprem
+    ? { text: 'Primary', color: '#06c' }
+    : isBurst
+      ? { text: 'Burst Active', color: '#f4c145' }
+      : { text: 'Standby', color: '#6a6e73' };
 
   const committedTps = m.committedTps ?? 0;
   const tpm          = committedTps * 60;
@@ -28,7 +34,15 @@ function ClusterCard({ m }: { m: ClusterMetrics }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div>
-          <div style={{ fontWeight: 700, color: '#f0f0f0', fontSize: 14 }}>{label}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: 14 }}>{label}</span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10,
+              background: `${roleBadge.color}22`, color: roleBadge.color, border: `1px solid ${roleBadge.color}55`,
+            }}>
+              {roleBadge.text}
+            </span>
+          </div>
           <div style={{ fontSize: 11, color: '#8a8d90', marginTop: 2 }}>
             {isOnprem ? 'Record-of-truth · Primary DB · Kafka source' : 'Cloud burst · KEDA 0–20 replicas'}
           </div>
@@ -80,12 +94,14 @@ function ClusterCard({ m }: { m: ClusterMetrics }) {
 }
 
 export default function ClusterCards({ payload }: Props) {
+  const genTps = payload?.clusters.find(c => c.cluster === 'onprem')?.generatorTps ?? 0;
+  const isBurst = genTps > ONPREM_CAPACITY_TPS;
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
       <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 14 }}>Cluster Status</div>
       {payload ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {payload.clusters.map(m => <ClusterCard key={m.cluster} m={m} />)}
+          {payload.clusters.map(m => <ClusterCard key={m.cluster} m={m} isBurst={isBurst} />)}
         </div>
       ) : (
         <div style={{ color: '#6a6e73', fontSize: 13, textAlign: 'center', padding: '40px 0' }}>

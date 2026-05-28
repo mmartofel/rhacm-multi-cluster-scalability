@@ -1,5 +1,5 @@
 import React from 'react';
-import { MetricsPayload } from '../types/metrics';
+import { MetricsPayload, ONPREM_CAPACITY_TPS } from '../types/metrics';
 
 interface Props { payload: MetricsPayload | null; }
 
@@ -18,8 +18,8 @@ export default function KpiStrip({ payload }: Props) {
   const cloudTpm = (cloud?.committedTps ?? 0) * 60;
   const totalTpm = onpremTpm + cloudTpm;
   const genTps = onprem?.generatorTps ?? 0;
-  const totalCommitTps = (onprem?.committedTps ?? 0) + (cloud?.committedTps ?? 0);
-  const efficiency = genTps > 0 ? Math.min(100, Math.round((totalCommitTps / genTps) * 100)) : null;
+  const isBurst = genTps > ONPREM_CAPACITY_TPS;
+  const overflow = isBurst ? Math.round(genTps - ONPREM_CAPACITY_TPS) : 0;
   const healthyCount = payload ? payload.clusters.filter(c => c.healthy).length : 0;
   const totalCount = payload?.clusters.length ?? 0;
 
@@ -37,10 +37,12 @@ export default function KpiStrip({ payload }: Props) {
       accent: '#f4c145',
     },
     {
-      label: 'Processing Efficiency',
-      value: efficiency !== null ? `${efficiency}%` : payload ? '—' : '—',
-      sub: efficiency !== null && efficiency < 80 ? 'backlog building ↑' : 'commit rate vs generation',
-      accent: efficiency !== null && efficiency < 80 ? '#c9190b' : '#4cb140',
+      label: 'Processing Mode',
+      value: !payload ? '—' : isBurst ? 'Cloud Burst' : 'Onprem Only',
+      sub: !payload ? 'waiting for data'
+        : isBurst ? `+${overflow} TPS overflow → GCP`
+        : `≤${ONPREM_CAPACITY_TPS} TPS · cloud at 0 replicas`,
+      accent: !payload ? '#6a6e73' : isBurst ? '#f4c145' : '#4cb140',
     },
     {
       label: 'Cluster Health',

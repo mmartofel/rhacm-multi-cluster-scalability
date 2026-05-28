@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Chart, ChartLine, ChartAxis, ChartGroup, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { ThroughputPoint } from '../App';
+import { ONPREM_CAPACITY_TPS } from '../types/metrics';
 
 interface Props { history: ThroughputPoint[]; }
 
@@ -26,8 +27,8 @@ export default function ThroughputChart({ history }: Props) {
 
   const hasCommitData = history.some(p => p.onpremCommit > 0 || p.cloudCommit > 0);
   const maxY = history.length > 0
-    ? Math.max(1, ...history.map(p => Math.max(p.genRate, p.onpremCommit, p.cloudCommit)))
-    : 1;
+    ? Math.max(ONPREM_CAPACITY_TPS, ...history.map(p => Math.max(p.genRate, p.onpremCommit, p.cloudCommit)))
+    : ONPREM_CAPACITY_TPS;
 
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px' }}>
@@ -37,6 +38,7 @@ export default function ThroughputChart({ history }: Props) {
           <span style={{ color: GEN_COLOR }}>— Generator</span>
           <span style={{ color: AWS_COLOR }}>— AWS commit</span>
           <span style={{ color: GCP_COLOR }}>— GCP commit</span>
+          <span style={{ color: '#c9190b' }}>– – Onprem cap. ({ONPREM_CAPACITY_TPS} TPS)</span>
         </div>
       </div>
       <div style={{ padding: '0 12px 8px', fontSize: 12, color: '#6a6e73', display: 'flex', justifyContent: 'space-between' }}>
@@ -58,7 +60,7 @@ export default function ThroughputChart({ history }: Props) {
             minDomain={{ y: 0 }}
             maxDomain={{ y: maxY * 1.15 }}
             domainPadding={{ y: [20, 10] }}
-            containerComponent={<ChartVoronoiContainer labels={({ datum }) => `${datum.name}: ${datum.y.toFixed(1)} TPS`} constrainToVisibleArea />}
+            containerComponent={<ChartVoronoiContainer labels={({ datum }) => datum.name ? `${datum.name}: ${datum.y.toFixed(1)} TPS` : ''} constrainToVisibleArea />}
             style={{ parent: { background: 'transparent' } }}
           >
             <ChartAxis
@@ -81,6 +83,13 @@ export default function ThroughputChart({ history }: Props) {
                 style={{ data: { stroke: GCP_COLOR, strokeWidth: 2 } }}
               />
             </ChartGroup>
+            <ChartLine
+              data={[
+                { x: history[0].ts, y: ONPREM_CAPACITY_TPS },
+                { x: history[history.length - 1].ts, y: ONPREM_CAPACITY_TPS },
+              ]}
+              style={{ data: { stroke: '#c9190b', strokeWidth: 1.5, strokeDasharray: '6,3' } }}
+            />
           </Chart>
         )}
       </div>

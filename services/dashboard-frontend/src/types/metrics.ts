@@ -1,3 +1,5 @@
+export const ONPREM_CAPACITY_TPS = 100;
+
 export interface ClusterMetrics {
   cluster: string;
   tps: number;
