@@ -51,6 +51,11 @@ public class TransactionProcessor {
             return;
         }
 
+        if (Transaction.findById(event.getTransactionId()) != null) {
+            Log.infof("Transaction %s already processed (idempotent skip)", event.getTransactionId());
+            return;
+        }
+
         Transaction tx = new Transaction();
         tx.transactionId = event.getTransactionId();
         tx.accountId = event.getAccountId();
