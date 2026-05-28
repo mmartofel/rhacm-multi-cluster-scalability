@@ -4,11 +4,11 @@ import com.redhat.banking.TransactionCommitted;
 import com.redhat.banking.TransactionEvent;
 import com.redhat.banking.TransactionType;
 import io.quarkus.logging.Log;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.smallrye.reactive.messaging.annotations.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -36,7 +36,6 @@ public class TransactionProcessor {
 
     @Incoming("transactions-in")
     @Blocking
-    @Transactional
     public void process(TransactionEvent event) {
         double delta = event.getType() == TransactionType.DEBIT
                 ? -event.getAmount()
@@ -55,20 +54,27 @@ public class TransactionProcessor {
             return;
         }
 
-        int inserted = em.createNativeQuery(
-                "INSERT INTO transactions (transaction_id, account_id, type, amount, balance_after, processed_at, source_cluster) " +
-                "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (transaction_id) DO NOTHING")
-                .setParameter(1, event.getTransactionId())
-                .setParameter(2, event.getAccountId())
-                .setParameter(3, event.getType().name())
-                .setParameter(4, BigDecimal.valueOf(event.getAmount()))
-                .setParameter(5, BigDecimal.valueOf(response.newBalance))
-                .setParameter(6, event.getTimestamp())
-                .setParameter(7, sourceCluster)
-                .executeUpdate();
+        final ApplyResponse finalResponse = response;
+        boolean shouldEmit = QuarkusTransaction.requiringNew().call(() -> {
+            int inserted = em.createNativeQuery(
+                    "INSERT INTO transactions (transaction_id, account_id, type, amount, balance_after, processed_at, source_cluster) " +
+                    "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (transaction_id) DO NOTHING")
+                    .setParameter(1, event.getTransactionId())
+                    .setParameter(2, event.getAccountId())
+                    .setParameter(3, event.getType().name())
+                    .setParameter(4, BigDecimal.valueOf(event.getAmount()))
+                    .setParameter(5, BigDecimal.valueOf(finalResponse.newBalance))
+                    .setParameter(6, event.getTimestamp())
+                    .setParameter(7, sourceCluster)
+                    .executeUpdate();
 
-        if (inserted == 0) {
-            Log.debugf("Transaction %s already committed (idempotent skip)", event.getTransactionId());
+            if (inserted == 0) {
+                Log.debugf("Transaction %s already committed (idempotent skip)", event.getTransactionId());
+            }
+            return inserted > 0;
+        });
+
+        if (!shouldEmit) {
             return;
         }
 
