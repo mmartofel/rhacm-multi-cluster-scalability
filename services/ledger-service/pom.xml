@@ -93,22 +93,6 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.apache.avro</groupId>
-        <artifactId>avro-maven-plugin</artifactId>
-        <version>${avro.version}</version>
-        <executions>
-          <execution>
-            <phase>generate-sources</phase>
-            <goals><goal>schema</goal></goals>
-            <configuration>
-              <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
-              <outputDirectory>${project.basedir}/target/generated-sources/avro</outputDirectory>
-              <stringType>String</stringType>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.12.1</version>
