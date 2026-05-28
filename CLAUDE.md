@@ -117,7 +117,8 @@ oc login https://api.zenek.sandbox3454.opentlc.com:6443   # onprem
 | `scripts/install-operators.sh --role hub\|spoke [--context <name>]` | Install OLM operators. Hub installs all 9 (RHACM + GitOps + 7 shared); Spoke installs 7 shared only. Default context: `onprem` for hub, `cloud` for spoke. |
 | `scripts/operator-check.sh` | Verify all required CSVs are `Succeeded` on both contexts. Exits 1 if any are missing or degraded. Run before Phase 0 bootstrap. |
 | `scripts/bootstrap-phase0.sh` | Full Phase 0 orchestration: operator check → MCH → ManagedCluster import → GitOps readiness → namespaces → pull secrets → ClusterIssuer. Requires `QUAY_USER` and `QUAY_TOKEN` env vars. |
-| `scripts/bootstrap-phase1.sh` | Full Phase 1 orchestration: register cloud cluster with Argo CD → apply ApplicationSets → wait for Kafka/PostgreSQL → deploy Skupper sites → exchange AccessGrant/AccessToken → apply Connectors+Listeners → wait for MirrorMaker 2 → Phase 1 checkpoint. No extra env vars required. |
+| `scripts/bootstrap-phase1.sh` | Full Phase 1 orchestration: register cloud cluster with Argo CD → apply Argo CD RBAC for `banking-infra` → apply ApplicationSets → wait for Kafka/PostgreSQL → deploy Skupper sites → exchange AccessGrant/AccessToken → apply Connectors+Listeners → wait for MirrorMaker 2 → Phase 1 checkpoint. No extra env vars required. |
+| `scripts/bootstrap-phase2.sh` | Full Phase 2 orchestration: build all 7 service images via Tekton → apply Skupper app-layer extensions → init PostgreSQL schema → propagate DB credentials → register Avro schemas with Apicurio → apply Argo CD RBAC for `banking-demo` → apply banking-demo ApplicationSet → wait for all pods → Phase 2 checkpoint. Requires `QUAY_ORG`, `QUAY_USER`, `QUAY_TOKEN` env vars (or `source quay.sh`). |
 | `get-kubeconfig.sh onprem\|cloud` | Write the current `oc login` session credentials to `kubeconfig-onprem` or `kubeconfig-cloud`. Use after token expiry. |
 
 ## Infrastructure Notes
@@ -150,3 +151,25 @@ The `KafkaMirrorMaker2` CR with the new spec structure requires `spec.target.ali
 
 **No routes on GCP cluster from Phase 1 is correct:**
 The cloud Skupper site uses an empty spec (outbound link initiator — no `linkAccess`). Kafka has internal-only listeners. Apicurio is onprem-only. The absence of routes in `banking-infra` on cloud after Phase 1 is expected behaviour.
+
+## Phase 2 Operational Notes
+
+Issues discovered during Phase 2 deployment that must be kept in mind for future work:
+
+**Apicurio serde package name — singular `serde`, not plural `serdes`:**
+The BOM-managed `apicurio-registry-serdes-avro-serde-2.5.9.Final.jar` (pulled via `quarkus-apicurio-registry-avro`) places its classes under the package `io.apicurio.registry.serde.avro` (singular). Any `application.properties` referencing `io.apicurio.registry.serdes.avro` (plural) causes `ClassNotFoundException` at startup. All three services — `transaction-generator`, `transaction-processor`, `ledger-service` — must use the singular form for both serializer and deserializer class names.
+
+**`@Blocking @Transactional` incompatible with SmallRye reactive messaging in Quarkus 3.9.5:**
+Combining `@Blocking` and `@Transactional` on a `@Incoming` message handler causes Agroal's `LocalXAResource.commit()` to find `enlisted=false`, throwing `RollbackException: Enlisted connection used without active transaction`. The channel enters permanent `fail-stop` state. Fix: remove `@Transactional` from the handler and wrap the database work in `QuarkusTransaction.requiringNew().call(() -> { ... })`. Add `quarkus-narayana-jta` as an explicit compile dependency in `pom.xml` (it is pulled transitively but the `QuarkusTransaction` API requires it on the compile classpath).
+
+**Hibernate 6 sequence naming — `ledger_entries_SEQ` with `INCREMENT BY 50`:**
+`ledger_entries` is declared with `BIGSERIAL PRIMARY KEY`, which PostgreSQL maps to the sequence `ledger_entries_id_seq`. Hibernate 6 `SequenceStyleGenerator` (used by Quarkus Panache) looks for `"ledger_entries_SEQ"` (uppercase, `INCREMENT BY 50`). The `bootstrap-phase2.sh` schema SQL block must include `CREATE SEQUENCE IF NOT EXISTS "ledger_entries_SEQ" START 1 INCREMENT BY 50;` immediately after the table DDL. Without it `ledger-service` crashes on first persist.
+
+**Kafka PVC disk retention — always set both `retention.ms` AND `retention.bytes`:**
+At 100 TPS with 6 partitions and replication factor 3, a 20 Gi broker PVC fills in under an hour with only a time-based retention limit. When MirrorMaker 2 reconnects after a link outage it replays backlog at full speed, accelerating the fill. Always configure both `retention.bytes` (per partition) and `segment.bytes` (smaller segments let the log cleaner enforce retention more frequently) in the `KafkaTopic` Strimzi CRs. Current values: `transactions-raw` — 2 h / 500 MB / 128 MB segments; `transactions-committed` — 2 h / 250 MB / 64 MB segments. Dynamic configs applied via `kafka-configs.sh` are lost when broker PVCs are wiped; the `KafkaTopic` CR is the only persistent source of truth.
+
+**Cloud `transaction-processor` must use the local cloud Kafka, not the Skupper Listener:**
+Both `KAFKA_BOOTSTRAP_SERVERS` (Deployment env var) and `bootstrapServers` (KEDA ScaledObject trigger) in the cloud overlay must be set to `banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092` — the Strimzi bootstrap service of the cloud-local Kafka cluster. Setting them to `kafka-bootstrap.banking-infra.svc.cluster.local:9092` (the Skupper Listener that tunnels to the onprem Kafka) causes KEDA to fail with "client has run out of available brokers" and breaks the chaos-resilience property: when the RHSI link is severed the cloud processor must continue consuming from its local Kafka replica, not fall over with the link.
+
+**`grep -P` (Perl regex) is not available on macOS:**
+Bootstrap script checkpoint sections must use `grep -qE` instead of `grep -qP`. BSD grep (macOS default) does not support the `-P` flag; every check silently fails and the checkpoint reports all deployments as down even when they are fully healthy. `grep -qE '[1-9]'` is POSIX-compatible and works on both Linux and macOS.
