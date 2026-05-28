@@ -73,7 +73,7 @@ REGISTRY="quay.io/${QUAY_ORG}"
 
 TRIGGERED_RUNS=()
 for svc in "${BUILD_SERVICES[@]}"; do
-  RUN_NAME=$(oc create -n banking-build --context onprem -f - <<EOF
+  RUN_NAME=$(oc create -n banking-build --context onprem -o jsonpath='{.metadata.name}' -f - <<EOF
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -99,10 +99,7 @@ spec:
           requests:
             storage: 2Gi
 EOF
-  oc get pipelinerun -n banking-build --context onprem \
-    --sort-by=.metadata.creationTimestamp \
-    -l "banking-demo/service=${svc}" \
-    -o jsonpath='{.items[-1].metadata.name}')
+)
   TRIGGERED_RUNS+=("$RUN_NAME")
   ok "PipelineRun triggered for ${svc}: $RUN_NAME"
 done
