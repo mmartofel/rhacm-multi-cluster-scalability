@@ -101,14 +101,8 @@ export default function App() {
             <GridItem lg={5} span={12}>
               <ClusterCards payload={payload} />
             </GridItem>
-            <GridItem lg={7} span={12}>
-              <ThroughputChart history={throughputHistory.current} />
-            </GridItem>
-            <GridItem lg={5} span={12}>
-              <ChaosPanel />
-            </GridItem>
             <GridItem span={12}>
-              <ComplianceWidget />
+              <ThroughputChart history={throughputHistory.current} />
             </GridItem>
           </Grid>
         );
@@ -128,15 +122,15 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: '#151515', minHeight: '100vh' }}>
-      <Page header={masthead} sidebar={sidebar}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Page header={masthead} sidebar={sidebar} style={{ flex: 1, minHeight: 0 }}>
         <PageSection style={{ background: '#151515', padding: '20px 24px' }} isFilled>
           {renderView()}
         </PageSection>
-        <PageSection style={{ background: '#0f1214', padding: '10px 24px', borderTop: '1px solid #2a2d32' }}>
-          <AppFooter />
-        </PageSection>
       </Page>
+      <footer style={{ background: '#0f1214', padding: '10px 24px', borderTop: '1px solid #2a2d32', flexShrink: 0 }}>
+        <AppFooter />
+      </footer>
     </div>
   );
 }

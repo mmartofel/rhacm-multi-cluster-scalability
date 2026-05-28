@@ -8,7 +8,14 @@
     <link rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@patternfly/patternfly@5.3.0/patternfly.min.css"
           crossorigin="anonymous" />
-    <style>body { background: #151515; margin: 0; } #root { min-height: 100vh; }</style>
+    <style>
+      html, body, #root { height: 100%; margin: 0; background: #151515; overflow: hidden; }
+      /* Allow PF Page to be a flex child so sticky footer works */
+      .pf-v5-c-page { min-height: 0 !important; height: 100%; }
+      /* Content area scrolls; header/sidebar/footer do not */
+      .pf-v5-c-page__main { overflow: hidden; }
+      .pf-v5-c-page__main-section { overflow-y: auto; }
+    </style>
   </head>
   <body style="background:#151515">
     <noscript>You need to enable JavaScript to run this app.</noscript>

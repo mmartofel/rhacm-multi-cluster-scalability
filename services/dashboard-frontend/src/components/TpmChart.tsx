@@ -23,6 +23,10 @@ export default function TpmChart({ history }: Props) {
     return () => ro.disconnect();
   }, []);
 
+  const maxY = history.length > 0
+    ? Math.max(1, ...history.map(p => Math.max(p.onprem, p.cloud)))
+    : 1;
+
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 12px 12px' }}>
@@ -42,15 +46,27 @@ export default function TpmChart({ history }: Props) {
             width={chartWidth}
             height={210}
             padding={{ bottom: 40, left: 62, right: 16, top: 6 }}
-            domain={{ x: [history[0].ts, history[history.length - 1].ts], y: [0, Math.max(10, ...history.map(p => Math.max(p.onprem, p.cloud))) * 1.15] }}
+            minDomain={{ y: 0 }}
+            maxDomain={{ y: maxY * 1.15 }}
+            domainPadding={{ y: [20, 10] }}
             containerComponent={<ChartVoronoiContainer labels={({ datum }) => `${datum.name}: ${Math.round(datum.y)} TPM`} constrainToVisibleArea />}
             style={{ parent: { background: 'transparent' } }}
           >
-            <ChartAxis tickFormat={(t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} tickCount={5} style={DARK_AXIS} />
+            <ChartAxis
+              tickFormat={(t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              tickCount={5}
+              style={DARK_AXIS}
+            />
             <ChartAxis dependentAxis tickFormat={(t: number) => `${Math.round(t)}`} style={DARK_AXIS} />
             <ChartGroup>
-              <ChartArea data={history.map(p => ({ x: p.ts, y: p.onprem, name: 'AWS' }))} style={{ data: { fill: 'rgba(0,102,204,0.2)', stroke: AWS_COLOR, strokeWidth: 2 } }} />
-              <ChartArea data={history.map(p => ({ x: p.ts, y: p.cloud,  name: 'GCP' }))} style={{ data: { fill: 'rgba(76,177,64,0.2)',  stroke: GCP_COLOR,  strokeWidth: 2 } }} />
+              <ChartArea
+                data={history.map(p => ({ x: p.ts, y: p.onprem, name: 'AWS' }))}
+                style={{ data: { fill: 'rgba(0,102,204,0.2)', stroke: AWS_COLOR, strokeWidth: 2 } }}
+              />
+              <ChartArea
+                data={history.map(p => ({ x: p.ts, y: p.cloud, name: 'GCP' }))}
+                style={{ data: { fill: 'rgba(76,177,64,0.2)', stroke: GCP_COLOR, strokeWidth: 2 } }}
+              />
             </ChartGroup>
           </Chart>
         )}
