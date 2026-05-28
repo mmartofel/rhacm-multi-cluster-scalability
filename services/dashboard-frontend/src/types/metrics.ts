@@ -6,6 +6,8 @@ export interface ClusterMetrics {
   processedSinceStart: number;
   healthy: boolean;
   timestamp: number;
+  committedTps: number;
+  generatorTps: number;
 }
 
 export interface MetricsPayload {

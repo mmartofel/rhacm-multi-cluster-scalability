@@ -8,4 +8,6 @@ public class ClusterMetrics {
     public long processedSinceStart;
     public boolean healthy;
     public long timestamp;
+    public double committedTps;   // derived: processedSinceStart delta / poll interval
+    public double generatorTps;   // from transaction-generator (onprem only)
 }
