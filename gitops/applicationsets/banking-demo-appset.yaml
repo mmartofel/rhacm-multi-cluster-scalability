@@ -19,10 +19,10 @@ spec:
           elements:
           - cluster: onprem
             server: https://kubernetes.default.svc
-            overlay: onprem
+            overlay: overlays/onprem
           - cluster: cloud
             server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
-            overlay: cloud
+            overlay: overlays/cloud
   # onprem-only services (no cloud deployment)
   - list:
       elements:
