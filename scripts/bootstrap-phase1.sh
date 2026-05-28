@@ -75,13 +75,6 @@ else
   CLOUD_TOKEN=$(oc --context "${CLOUD}" create token argocd-manager \
     -n kube-system --duration=8760h)
 
-  CLOUD_CA=$(oc --context "${CLOUD}" get secret \
-    -n kube-system -l kubernetes.io/legacy-token-type=secret \
-    --field-selector type=kubernetes.io/service-account-token \
-    -o jsonpath='{.items[0].data.ca\.crt}' 2>/dev/null \
-    || oc --context "${CLOUD}" config view --raw \
-       -o jsonpath='{.clusters[?(@.name=="cloud")].cluster.certificate-authority-data}')
-
   oc --context "${ONPREM}" apply -n "${GITOPS_NS}" -f - <<EOF
 apiVersion: v1
 kind: Secret
@@ -98,13 +91,21 @@ stringData:
     {
       "bearerToken": "${CLOUD_TOKEN}",
       "tlsClientConfig": {
-        "insecure": false,
-        "caData": "${CLOUD_CA}"
+        "insecure": true
       }
     }
 EOF
   ok "cloud cluster registered with Argo CD"
 fi
+
+# ── Step 1b: Argo CD RBAC for banking-infra ───────────────────────────────
+log "Step 1b: Argo CD RBAC for banking-infra on both clusters"
+# Argo CD SA needs admin in banking-infra before it can sync Kafka/PG/Apicurio
+oc --context "${ONPREM}" apply \
+  -f "${REPO_ROOT}/infra/argocd/banking-infra-rbac.yaml"
+oc --context "${CLOUD}" apply \
+  -f "${REPO_ROOT}/infra/argocd/banking-infra-rbac.yaml"
+ok "Argo CD admin RoleBinding applied in banking-infra on both clusters"
 
 # ── Step 2: Apply Argo CD ApplicationSets ─────────────────────────────────
 log "Step 2: Apply Argo CD ApplicationSets (Kafka, PostgreSQL, Apicurio, MM2)"

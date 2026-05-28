@@ -191,6 +191,9 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   source_cluster  VARCHAR(10)
 );
 
+-- Hibernate 6 sequence (Panache SequenceStyleGenerator, allocationSize=50)
+CREATE SEQUENCE IF NOT EXISTS "ledger_entries_SEQ" START 1 INCREMENT BY 50;
+
 -- Seed 100 test accounts (idempotent)
 INSERT INTO accounts (account_id, balance)
 SELECT 'ACC' || LPAD(i::text, 5, '0'), 1000000.00
