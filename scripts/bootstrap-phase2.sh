@@ -71,8 +71,9 @@ BUILD_SERVICES=(
 )
 REGISTRY="quay.io/${QUAY_ORG}"
 
+TRIGGERED_RUNS=()
 for svc in "${BUILD_SERVICES[@]}"; do
-  oc create -n banking-build --context onprem -f - <<EOF
+  RUN_NAME=$(oc create -n banking-build --context onprem -f - <<EOF
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -98,34 +99,42 @@ spec:
           requests:
             storage: 2Gi
 EOF
-  ok "PipelineRun triggered for ${svc}"
+  oc get pipelinerun -n banking-build --context onprem \
+    --sort-by=.metadata.creationTimestamp \
+    -l "banking-demo/service=${svc}" \
+    -o jsonpath='{.items[-1].metadata.name}')
+  TRIGGERED_RUNS+=("$RUN_NAME")
+  ok "PipelineRun triggered for ${svc}: $RUN_NAME"
 done
 
-# Wait for all PipelineRuns to complete (up to 45 min)
+# Wait only for the PipelineRuns triggered in this run (up to 45 min)
 log "Waiting for all Tekton builds to complete (up to 45 min)..."
 DEADLINE=$((SECONDS + 2700))
-BUILD_DONE=0
-BUILD_FAILED=0
 while [[ $SECONDS -lt $DEADLINE ]]; do
-  BUILD_DONE=$(oc get pipelinerun -n banking-build --context onprem \
-    -l banking-demo/service \
-    -o jsonpath='{.items[?(@.status.conditions[0].status=="True")].metadata.name}' \
-    2>/dev/null | wc -w | tr -d ' ')
-  BUILD_FAILED=$(oc get pipelinerun -n banking-build --context onprem \
-    -l banking-demo/service \
-    -o jsonpath='{.items[?(@.status.conditions[0].status=="False")].metadata.name}' \
-    2>/dev/null | wc -w | tr -d ' ')
-  if [[ "$BUILD_FAILED" -gt 0 ]]; then
-    fail "$BUILD_FAILED PipelineRun(s) failed — run: oc get pipelinerun -n banking-build --context onprem"
+  BUILD_DONE=0
+  BUILD_FAILED=()
+  for run in "${TRIGGERED_RUNS[@]}"; do
+    status=$(oc get pipelinerun "$run" -n banking-build --context onprem \
+      -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+    reason=$(oc get pipelinerun "$run" -n banking-build --context onprem \
+      -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || echo "Unknown")
+    if [[ "$status" == "True" ]]; then
+      ((BUILD_DONE++)) || true
+    elif [[ "$status" == "False" ]]; then
+      BUILD_FAILED+=("$run ($reason)")
+    fi
+  done
+  if [[ "${#BUILD_FAILED[@]}" -gt 0 ]]; then
+    fail "${#BUILD_FAILED[@]} PipelineRun(s) failed: ${BUILD_FAILED[*]}"
   fi
-  if [[ "$BUILD_DONE" -eq "${#BUILD_SERVICES[@]}" ]]; then
+  if [[ "$BUILD_DONE" -eq "${#TRIGGERED_RUNS[@]}" ]]; then
     break
   fi
-  info "Builds: $BUILD_DONE/${#BUILD_SERVICES[@]} done..."
+  info "Builds: $BUILD_DONE/${#TRIGGERED_RUNS[@]} done..."
   sleep 30
 done
-if [[ "$BUILD_DONE" -lt "${#BUILD_SERVICES[@]}" ]]; then
-  fail "Build timeout — $BUILD_DONE/${#BUILD_SERVICES[@]} completed. Check: oc get pipelinerun -n banking-build --context onprem"
+if [[ "$BUILD_DONE" -lt "${#TRIGGERED_RUNS[@]}" ]]; then
+  fail "Build timeout — $BUILD_DONE/${#TRIGGERED_RUNS[@]} completed. Check: oc get pipelinerun -n banking-build --context onprem"
 fi
 ok "All 7 images built and pushed to quay.io/$QUAY_ORG/ via Tekton"
 
