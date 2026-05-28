@@ -35,7 +35,7 @@ public class ClusterPoller {
     @ConfigProperty(name = "CLOUD_LEDGER_URL", defaultValue = "http://cloud-ledger-service:8080")
     String cloudLedgerUrl;
 
-    @Scheduled(every = "500ms")
+    @Scheduled(every = "PT0.5S")
     void poll() {
         List<ClusterMetrics> metrics = new ArrayList<>();
         metrics.add(pollCluster("onprem", onpremGatewayUrl, onpremLedgerUrl));
