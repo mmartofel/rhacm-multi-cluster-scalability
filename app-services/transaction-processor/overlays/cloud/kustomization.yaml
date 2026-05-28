@@ -6,7 +6,7 @@ patches:
 - patch: |-
     - op: replace
       path: /spec/template/spec/containers/0/env/0/value
-      value: "kafka-bootstrap.banking-infra.svc.cluster.local:9092"
+      value: "banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092"
     - op: replace
       path: /spec/template/spec/containers/0/env/1/value
       value: "http://apicurio-registry.banking-infra.svc.cluster.local:8080"
@@ -28,7 +28,7 @@ patches:
       value: 20
     - op: replace
       path: /spec/triggers/0/metadata/bootstrapServers
-      value: "kafka-bootstrap.banking-infra.svc.cluster.local:9092"
+      value: "banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092"
     - op: replace
       path: /spec/triggers/0/metadata/consumerGroup
       value: "transaction-processors-cloud"
