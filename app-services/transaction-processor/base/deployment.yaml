@@ -31,7 +31,7 @@ spec:
         - name: ACCOUNT_SERVICE_URL
           value: http://account-service.banking-demo.svc.cluster.local:8080
         - name: DATASOURCE_URL
-          value: jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres
+          value: jdbc:postgresql://postgres-pgbouncer.banking-infra.svc.cluster.local:5432/postgres
         - name: DATASOURCE_USER
           valueFrom:
             secretKeyRef:

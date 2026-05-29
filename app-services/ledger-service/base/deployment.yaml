@@ -29,7 +29,7 @@ spec:
         - name: SOURCE_CLUSTER
           value: onprem
         - name: DATASOURCE_URL
-          value: jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres
+          value: jdbc:postgresql://postgres-pgbouncer.banking-infra.svc.cluster.local:5432/postgres
         - name: DATASOURCE_USER
           valueFrom:
             secretKeyRef:
