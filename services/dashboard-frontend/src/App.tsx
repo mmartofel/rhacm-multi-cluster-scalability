@@ -113,13 +113,16 @@ export default function App() {
               <KpiStrip payload={payload} />
             </GridItem>
             <GridItem lg={7} span={12}>
-              <TpmChart history={tpmHistory.current} />
+              <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '12px 12px 8px' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 12 }}>Transactions</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <TpmChart history={tpmHistory.current} />
+                  <ThroughputChart history={throughputHistory.current} />
+                </div>
+              </div>
             </GridItem>
             <GridItem lg={5} span={12}>
               <ClusterCards payload={payload} />
-            </GridItem>
-            <GridItem span={12}>
-              <ThroughputChart history={throughputHistory.current} />
             </GridItem>
           </Grid>
         );
