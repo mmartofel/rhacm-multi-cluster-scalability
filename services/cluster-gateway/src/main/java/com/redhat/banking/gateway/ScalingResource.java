@@ -1,7 +1,7 @@
 package com.redhat.banking.gateway;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.smallrye.common.annotation.Blocking;
+import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -22,13 +22,23 @@ public class ScalingResource {
     @Inject
     KubernetesClient k8s;
 
+    private volatile int processorReplicas = -1;
+    private volatile int accountReplicas   = -1;
+
+    // Refresh replica counts on a background thread every 5 s — keeps the
+    // blocking K8s API call off the Vert.x event loop entirely.
+    @Scheduled(every = "PT5S")
+    void refreshReplicas() {
+        processorReplicas = readyReplicas("transaction-processor");
+        accountReplicas   = readyReplicas("account-service");
+    }
+
     @GET
     @Path("/scaling/summary")
-    @Blocking
     public Response scalingSummary() {
         return Response.ok(Map.of(
-                "processorReplicas", readyReplicas("transaction-processor"),
-                "accountReplicas",   readyReplicas("account-service")
+                "processorReplicas", processorReplicas,
+                "accountReplicas",   accountReplicas
         )).build();
     }
 
