@@ -323,11 +323,13 @@ ONPREM_DEPLOYMENTS=(
 
 CLOUD_DEPLOYMENTS=(
   transaction-generator
-  transaction-processor
   account-service
   ledger-service
   cluster-gateway
 )
+# transaction-processor is intentionally excluded: KEDA manages it with minReplicaCount=0,
+# so it correctly runs 0 replicas when no load is present. Readiness is verified via
+# the KEDA ScaledObject check below.
 
 wait_deployment() {
   local name=$1 ctx=$2 ns=banking-demo
@@ -394,6 +396,10 @@ check "onprem: KEDA ScaledObject ready" \
   "oc get scaledobject transaction-processor -n banking-demo --context onprem -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' | grep -q True"
 check "cloud: KEDA ScaledObject ready" \
   "oc get scaledobject transaction-processor -n banking-demo --context cloud -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' | grep -q True"
+
+info "NOTE: cloud transaction-processor runs 0 replicas at idle (minReplicaCount=0)."
+info "      KEDA scales it up automatically when load exceeds lagThreshold=500 messages."
+info "      This is expected — not a failure."
 
 # Dashboard route
 DASH_HOST="dashboard.apps.zenek.sandbox3454.opentlc.com"
