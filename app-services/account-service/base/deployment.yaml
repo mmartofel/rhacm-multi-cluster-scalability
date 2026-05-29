@@ -18,6 +18,7 @@ spec:
       containers:
       - name: account-service
         image: quay.io/mmartofe/banking-demo-account-service:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:

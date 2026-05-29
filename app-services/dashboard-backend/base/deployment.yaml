@@ -18,6 +18,7 @@ spec:
       containers:
       - name: dashboard-backend
         image: quay.io/mmartofe/banking-demo-dashboard-backend:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:

@@ -18,6 +18,7 @@ spec:
       containers:
       - name: transaction-generator
         image: quay.io/mmartofe/banking-demo-transaction-generator:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         envFrom:
