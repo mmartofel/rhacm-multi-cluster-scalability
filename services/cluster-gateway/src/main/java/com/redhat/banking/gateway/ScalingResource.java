@@ -1,6 +1,7 @@
 package com.redhat.banking.gateway;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.smallrye.common.annotation.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
@@ -23,6 +24,7 @@ public class ScalingResource {
 
     @GET
     @Path("/scaling/summary")
+    @Blocking
     public Response scalingSummary() {
         return Response.ok(Map.of(
                 "processorReplicas", readyReplicas("transaction-processor"),
