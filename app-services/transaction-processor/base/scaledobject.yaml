@@ -8,12 +8,12 @@ spec:
     name: transaction-processor
   minReplicaCount: 1
   maxReplicaCount: 10
-  cooldownPeriod: 60
+  cooldownPeriod: 300
   triggers:
   - type: kafka
     metadata:
       bootstrapServers: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
       consumerGroup: transaction-processors-onprem
       topic: transactions-raw
-      lagThreshold: "100"
+      lagThreshold: "500"
       offsetResetPolicy: latest

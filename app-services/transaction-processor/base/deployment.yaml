@@ -43,7 +43,7 @@ spec:
               name: postgresql-credentials
               key: password
         - name: QUARKUS_DATASOURCE_JDBC_MAX_SIZE
-          value: "3"
+          value: "5"
         - name: QUARKUS_DATASOURCE_JDBC_MIN_SIZE
           value: "1"
         resources:
