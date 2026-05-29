@@ -12,6 +12,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Path("/api/backend")
 @Produces(MediaType.APPLICATION_JSON)
@@ -24,6 +25,12 @@ public class DashboardResource {
 
     @ConfigProperty(name = "CLOUD_GATEWAY_URL", defaultValue = "http://cloud-cluster-gateway:8080")
     String cloudGatewayUrl;
+
+    // Tracks the total TPS last set via the Load Control API so ClusterPoller
+    // can report the full rate (not just the onprem split portion).
+    private final AtomicInteger lastTotalTps = new AtomicInteger(0);
+
+    int getLastTotalTps() { return lastTotalTps.get(); }
 
     @PUT
     @Path("/traffic-weight")
@@ -52,6 +59,7 @@ public class DashboardResource {
 
         httpPut(onpremGatewayUrl + "/api/gateway/generator/tps/" + onpremTps, "");
         httpPut(cloudGatewayUrl  + "/api/gateway/generator/tps/" + cloudTps,  "");
+        lastTotalTps.set(total);
 
         return Response.ok(Map.of(
                 "total", total,

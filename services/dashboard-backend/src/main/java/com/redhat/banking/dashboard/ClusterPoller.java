@@ -24,6 +24,9 @@ public class ClusterPoller {
     @Inject
     ObjectMapper mapper;
 
+    @Inject
+    DashboardResource dashboardResource;
+
     @ConfigProperty(name = "ONPREM_GATEWAY_URL", defaultValue = "http://cluster-gateway:8080")
     String onpremGatewayUrl;
 
@@ -35,9 +38,6 @@ public class ClusterPoller {
 
     @ConfigProperty(name = "CLOUD_LEDGER_URL", defaultValue = "http://cloud-ledger-service:8080")
     String cloudLedgerUrl;
-
-    @ConfigProperty(name = "GENERATOR_URL", defaultValue = "http://transaction-generator:8080")
-    String generatorUrl;
 
     private final Map<String, Long> prevProcessed = new ConcurrentHashMap<>();
     private volatile long prevPollMs = 0;
@@ -101,13 +101,10 @@ public class ClusterPoller {
         }
 
         if ("onprem".equals(name)) {
-            try {
-                String genJson = httpGet(generatorUrl + "/api/generator/status");
-                JsonNode gen = mapper.readTree(genJson);
-                m.generatorTps = gen.path("tpsRate").asDouble(0);
-            } catch (Exception e) {
-                m.generatorTps = 0;
-            }
+            // Report the total TPS last set via Load Control (onprem + cloud combined)
+            // so the dashboard can highlight the correct preset (e.g. High=200, Burst=300)
+            // rather than just the onprem split portion (always capped at 100).
+            m.generatorTps = dashboardResource.getLastTotalTps();
         }
 
         return m;
