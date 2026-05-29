@@ -11,12 +11,6 @@ export default function AppHeader({ connected }: Props) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, color: 'white' }}>
-      <img
-        src="https://upload.wikimedia.org/wikipedia/commons/d/d8/Red_Hat_logo.svg"
-        alt="Red Hat"
-        height={8}
-        style={{ filter: 'brightness(0) invert(1)' }}
-      />
       <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>
         Transactions Processing Dashboard for Multicluster
       </span>
