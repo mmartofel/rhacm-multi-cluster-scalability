@@ -20,8 +20,28 @@ export default function KpiStrip({ payload }: Props) {
   const genTps = onprem?.generatorTps ?? 0;
   const isBurst = genTps > ONPREM_CAPACITY_TPS;
   const overflow = isBurst ? Math.round(genTps - ONPREM_CAPACITY_TPS) : 0;
+  const onpremWeight = onprem?.trafficWeight ?? 100;
+  const isCloudOnly = onpremWeight === 0;
+  const isSplit = onpremWeight > 0 && onpremWeight < 100;
   const healthyCount = payload ? payload.clusters.filter(c => c.healthy).length : 0;
   const totalCount = payload?.clusters.length ?? 0;
+
+  const modeValue = !payload ? '—'
+    : isCloudOnly ? 'Cloud Only'
+    : isBurst ? 'Cloud Burst'
+    : isSplit ? 'Split Load'
+    : 'Onprem Only';
+
+  const modeSub = !payload ? 'waiting for data'
+    : isCloudOnly ? 'all traffic → GCP cloud burst'
+    : isBurst ? `+${overflow} TPS overflow → GCP`
+    : isSplit ? `${onpremWeight}% AWS · ${100 - onpremWeight}% GCP`
+    : `≤${ONPREM_CAPACITY_TPS} TPS · cloud at 0 replicas`;
+
+  const modeAccent = !payload ? '#6a6e73'
+    : (isCloudOnly || isBurst) ? '#f4c145'
+    : isSplit ? '#06c'
+    : '#4cb140';
 
   const tiles: Tile[] = [
     {
@@ -38,11 +58,9 @@ export default function KpiStrip({ payload }: Props) {
     },
     {
       label: 'Processing Mode',
-      value: !payload ? '—' : isBurst ? 'Cloud Burst' : 'Onprem Only',
-      sub: !payload ? 'waiting for data'
-        : isBurst ? `+${overflow} TPS overflow → GCP`
-        : `≤${ONPREM_CAPACITY_TPS} TPS · cloud at 0 replicas`,
-      accent: !payload ? '#6a6e73' : isBurst ? '#f4c145' : '#4cb140',
+      value: modeValue,
+      sub: modeSub,
+      accent: modeAccent,
     },
     {
       label: 'Cluster Health',

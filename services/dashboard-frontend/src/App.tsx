@@ -72,9 +72,8 @@ export default function App() {
   useEffect(() => {
     if (!payload) return;
     const genTps = payload.clusters.find(c => c.cluster === 'onprem')?.generatorTps ?? 0;
-    const targetWeight = genTps > ONPREM_CAPACITY_TPS
-      ? Math.max(1, Math.round(ONPREM_CAPACITY_TPS / genTps * 100))
-      : 100;
+    if (genTps <= ONPREM_CAPACITY_TPS) return;
+    const targetWeight = Math.max(1, Math.round(ONPREM_CAPACITY_TPS / genTps * 100));
     if (targetWeight === lastAutoWeight.current) return;
     lastAutoWeight.current = targetWeight;
     fetch('/api/gateway/traffic-weight', {
