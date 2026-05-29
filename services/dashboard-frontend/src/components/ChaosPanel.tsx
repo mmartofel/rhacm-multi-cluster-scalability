@@ -1,44 +1,79 @@
 import React, { useState } from 'react';
 import { MetricsPayload } from '../types/metrics';
+import { ProcessingMode } from '../App';
 
-interface Props { payload: MetricsPayload | null; }
+interface Props {
+  payload: MetricsPayload | null;
+  processingMode: ProcessingMode;
+  onModeChange: (mode: ProcessingMode) => void;
+}
 
-const ACTIONS = [
-  { label: 'Route 100% → AWS',  weight: 100, variant: 'primary'   as const },
-  { label: 'Split 50 / 50',     weight: 50,  variant: 'secondary' as const },
-  { label: 'Route 100% → GCP',  weight: 0,   variant: 'warning'   as const },
+interface ModeAction {
+  mode: ProcessingMode;
+  label: string;
+  description: string;
+  weight: number;
+  activeColor: string;
+  borderColor: string;
+}
+
+const MODES: ModeAction[] = [
+  {
+    mode: 'auto-burst',
+    label: 'Auto Burst',
+    description: '≤100 TPS onprem · cloud scales on overflow',
+    weight: 100,
+    activeColor: '#92d40022',
+    borderColor: '#92d400',
+  },
+  {
+    mode: 'onprem-only',
+    label: 'Route 100% → AWS',
+    description: 'all traffic routed to onprem cluster',
+    weight: 100,
+    activeColor: '#0066cc22',
+    borderColor: '#06c',
+  },
+  {
+    mode: 'split',
+    label: 'Split 50 / 50',
+    description: 'traffic split equally across clusters',
+    weight: 50,
+    activeColor: '#8476d122',
+    borderColor: '#8476d1',
+  },
+  {
+    mode: 'cloud-only',
+    label: 'Route 100% → GCP',
+    description: 'all traffic routed to cloud cluster',
+    weight: 0,
+    activeColor: '#f4c14522',
+    borderColor: '#f4c145',
+  },
 ];
 
-const VARIANT_STYLE: Record<string, React.CSSProperties> = {
-  primary:   { background: '#06c',    border: '1px solid #06c',    color: 'white' },
-  secondary: { background: 'transparent', border: '1px solid #06c', color: '#06c' },
-  warning:   { background: '#f4c145', border: '1px solid #f4c145', color: '#151515' },
-};
-
-const ACTIVE_RING: React.CSSProperties = { outline: '2px solid #92d400', outlineOffset: 2 };
-
-export default function ChaosPanel({ payload }: Props) {
+export default function ChaosPanel({ payload, processingMode, onModeChange }: Props) {
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
 
   const onpremWeight = payload?.clusters.find(c => c.cluster === 'onprem')?.trafficWeight ?? null;
   const cloudWeight  = payload?.clusters.find(c => c.cluster === 'cloud')?.trafficWeight  ?? null;
 
-  const activeWeight = onpremWeight;
-
-  const call = async (weight: number) => {
-    setPending(String(weight));
+  const selectMode = async (action: ModeAction) => {
+    if (pending) return;
+    setPending(action.mode);
     setStatus(null);
     try {
       const res = await fetch('/api/backend/traffic-weight', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trafficWeight: weight }),
+        body: JSON.stringify({ trafficWeight: action.weight }),
       });
       const json = await res.json();
-      const aws = json.onprem ?? weight;
-      const gcp = json.cloud  ?? (100 - weight);
+      const aws = json.onprem ?? action.weight;
+      const gcp = json.cloud  ?? (100 - action.weight);
       setStatus({ msg: `Traffic updated — AWS ${aws}% · GCP ${gcp}%`, ok: true });
+      onModeChange(action.mode);
     } catch (e: any) {
       setStatus({ msg: `Error: ${e.message}`, ok: false });
     } finally {
@@ -78,30 +113,41 @@ export default function ChaosPanel({ payload }: Props) {
         </div>
       )}
 
+      {/* Processing Mode buttons */}
+      <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Processing Mode
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-        {ACTIONS.map(a => {
-          const isActive = activeWeight === a.weight;
+        {MODES.map(a => {
+          const isActive = processingMode === a.mode;
           return (
             <button
-              key={a.label}
-              onClick={() => call(a.weight)}
+              key={a.mode}
+              onClick={() => selectMode(a)}
               disabled={pending !== null}
               style={{
-                ...VARIANT_STYLE[a.variant],
-                ...(isActive ? ACTIVE_RING : {}),
-                padding: '9px 14px',
+                background: isActive ? a.activeColor : 'transparent',
+                border: `1px solid ${isActive ? a.borderColor : '#3c3f42'}`,
+                color: isActive ? '#f0f0f0' : '#8a8d90',
+                padding: '10px 14px',
                 borderRadius: 6,
                 fontSize: 13,
-                fontWeight: 600,
+                fontWeight: isActive ? 700 : 400,
                 cursor: pending ? 'wait' : 'pointer',
-                opacity: pending ? 0.7 : 1,
-                transition: 'opacity 0.15s',
+                opacity: pending && pending !== a.mode ? 0.5 : 1,
+                transition: 'all 0.15s',
+                textAlign: 'left',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              {a.label}{isActive ? ' ✓' : ''}
+              <span>{a.label}</span>
+              {isActive && <span style={{ fontSize: 11, color: a.borderColor }}>● active</span>}
             </button>
           );
         })}
+
         <button
           onClick={async () => {
             setPending('health');
@@ -120,6 +166,7 @@ export default function ChaosPanel({ payload }: Props) {
           style={{
             background: 'transparent', border: '1px solid #3c3f42', color: '#8a8d90',
             padding: '7px 14px', borderRadius: 6, fontSize: 12, cursor: pending ? 'wait' : 'pointer',
+            marginTop: 4,
           }}
         >
           Check Gateway Health

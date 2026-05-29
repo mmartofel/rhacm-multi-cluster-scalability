@@ -24,11 +24,13 @@ export type TpmPoint = { ts: number; onprem: number; cloud: number };
 export type ThroughputPoint = { ts: number; genRate: number; onpremCommit: number; cloudCommit: number; estimated: boolean };
 export type AutoscalePoint = { ts: number; onpremProcessor: number; cloudProcessor: number; onpremAccount: number; cloudAccount: number };
 export type View = 'overview' | 'load-control' | 'chaos' | 'compliance' | 'autoscale' | 'about';
+export type ProcessingMode = 'auto-burst' | 'onprem-only' | 'split' | 'cloud-only';
 
 export default function App() {
   const [payload, setPayload] = useState<MetricsPayload | null>(null);
   const [connected, setConnected] = useState(false);
   const [activeView, setActiveView] = useState<View>('overview');
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('auto-burst');
 
   const tpmHistory = useRef<TpmPoint[]>([]);
   const throughputHistory = useRef<ThroughputPoint[]>([]);
@@ -110,7 +112,7 @@ export default function App() {
         return (
           <Grid hasGutter>
             <GridItem span={12}>
-              <KpiStrip payload={payload} />
+              <KpiStrip payload={payload} processingMode={processingMode} />
             </GridItem>
             <GridItem lg={5} span={12}>
               <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '12px 12px 8px' }}>
@@ -129,7 +131,7 @@ export default function App() {
       case 'load-control':
         return <LoadControlPanel payload={payload} />;
       case 'chaos':
-        return <ChaosPanel payload={payload} />;
+        return <ChaosPanel payload={payload} processingMode={processingMode} onModeChange={setProcessingMode} />;
       case 'compliance':
         return <ComplianceWidget />;
       case 'autoscale':
