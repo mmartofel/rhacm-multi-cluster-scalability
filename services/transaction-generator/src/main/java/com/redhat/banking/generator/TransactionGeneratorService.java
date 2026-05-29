@@ -26,7 +26,7 @@ public class TransactionGeneratorService {
     @Channel("transactions-out")
     Emitter<TransactionEvent> emitter;
 
-    @ConfigProperty(name = "TPS_RATE", defaultValue = "100")
+    @ConfigProperty(name = "TPS_RATE", defaultValue = "0")
     volatile int tpsRate;
 
     private final Random random = new Random();

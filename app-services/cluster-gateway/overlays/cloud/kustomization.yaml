@@ -10,6 +10,9 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/0/value
       value: "cloud"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/1/value
+      value: "0"
   target:
     kind: Deployment
     name: cluster-gateway

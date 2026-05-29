@@ -25,6 +25,8 @@ spec:
         env:
         - name: SOURCE_CLUSTER
           value: onprem
+        - name: TRAFFIC_WEIGHT
+          value: "100"
         resources:
           requests:
             cpu: 100m

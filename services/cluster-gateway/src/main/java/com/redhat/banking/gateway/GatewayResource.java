@@ -1,6 +1,7 @@
 package com.redhat.banking.gateway;
 
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -24,8 +25,16 @@ public class GatewayResource {
 
     private final String cluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
 
+    @ConfigProperty(name = "TRAFFIC_WEIGHT", defaultValue = "100")
+    int initialTrafficWeight;
+
     // Traffic weight 0-100 (percentage of traffic routed to this cluster)
-    private final AtomicInteger trafficWeight = new AtomicInteger(50);
+    private final AtomicInteger trafficWeight = new AtomicInteger(100);
+
+    @PostConstruct
+    void init() {
+        trafficWeight.set(Math.max(0, Math.min(100, initialTrafficWeight)));
+    }
 
     // Rolling TPS counter
     private final AtomicLong requestsThisSecond = new AtomicLong(0);
