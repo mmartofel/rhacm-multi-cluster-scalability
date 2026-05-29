@@ -2,3 +2,5 @@ kubeconfig*
 quay.sh
 .vscode/
 .claude/
+node_modules/
+dist/
