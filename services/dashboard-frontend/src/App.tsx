@@ -112,7 +112,7 @@ export default function App() {
             <GridItem span={12}>
               <KpiStrip payload={payload} />
             </GridItem>
-            <GridItem lg={7} span={12}>
+            <GridItem lg={5} span={12}>
               <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '12px 12px 8px' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 12 }}>Transactions</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
