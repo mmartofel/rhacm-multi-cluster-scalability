@@ -33,7 +33,6 @@ export default function App() {
   const tpmHistory = useRef<TpmPoint[]>([]);
   const throughputHistory = useRef<ThroughputPoint[]>([]);
   const autoscaleHistory = useRef<AutoscalePoint[]>([]);
-  const lastAutoWeight = useRef<number>(-1);
 
   useEffect(() => {
     let ws: WebSocket;
@@ -85,20 +84,6 @@ export default function App() {
     connect();
     return () => { ws?.close(); clearTimeout(reconnectTimer); };
   }, []);
-
-  useEffect(() => {
-    if (!payload) return;
-    const genTps = payload.clusters.find(c => c.cluster === 'onprem')?.generatorTps ?? 0;
-    if (genTps <= ONPREM_CAPACITY_TPS) return;
-    const targetWeight = Math.max(1, Math.round(ONPREM_CAPACITY_TPS / genTps * 100));
-    if (targetWeight === lastAutoWeight.current) return;
-    lastAutoWeight.current = targetWeight;
-    fetch('/api/gateway/traffic-weight', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trafficWeight: targetWeight }),
-    }).catch(() => {});
-  }, [payload]);
 
   const masthead = (
     <Masthead style={{ background: '#151515', borderBottom: '1px solid #2a2d32' }}>

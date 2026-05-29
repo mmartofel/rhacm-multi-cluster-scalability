@@ -4,4 +4,4 @@ metadata:
   name: transaction-generator-config
   namespace: banking-demo
 data:
-  TPS_RATE: "100"
+  TPS_RATE: "0"
