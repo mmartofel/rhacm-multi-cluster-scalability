@@ -124,7 +124,7 @@ export default function App() {
       case 'load-control':
         return <LoadControlPanel payload={payload} />;
       case 'chaos':
-        return <ChaosPanel />;
+        return <ChaosPanel payload={payload} />;
       case 'compliance':
         return <ComplianceWidget />;
       case 'autoscale':
