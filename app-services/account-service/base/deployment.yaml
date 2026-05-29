@@ -23,7 +23,7 @@ spec:
         - containerPort: 8080
         env:
         - name: DATASOURCE_URL
-          value: jdbc:postgresql://postgres-pgbouncer.banking-infra.svc.cluster.local:5432/postgres
+          value: jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres
         - name: DATASOURCE_USER
           valueFrom:
             secretKeyRef:
@@ -36,6 +36,10 @@ spec:
               key: password
         - name: SOURCE_CLUSTER
           value: onprem
+        - name: QUARKUS_DATASOURCE_JDBC_MAX_SIZE
+          value: "3"
+        - name: QUARKUS_DATASOURCE_JDBC_MIN_SIZE
+          value: "1"
         resources:
           requests:
             cpu: 100m

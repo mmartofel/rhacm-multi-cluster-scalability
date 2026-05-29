@@ -31,7 +31,7 @@ spec:
         - name: ACCOUNT_SERVICE_URL
           value: http://account-service.banking-demo.svc.cluster.local:8080
         - name: DATASOURCE_URL
-          value: jdbc:postgresql://postgres-pgbouncer.banking-infra.svc.cluster.local:5432/postgres
+          value: jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres
         - name: DATASOURCE_USER
           valueFrom:
             secretKeyRef:
@@ -42,6 +42,10 @@ spec:
             secretKeyRef:
               name: postgresql-credentials
               key: password
+        - name: QUARKUS_DATASOURCE_JDBC_MAX_SIZE
+          value: "3"
+        - name: QUARKUS_DATASOURCE_JDBC_MIN_SIZE
+          value: "1"
         resources:
           requests:
             cpu: 200m
