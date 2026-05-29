@@ -20,7 +20,7 @@ const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${wind
 const MAX_HISTORY = 360;
 
 export type TpmPoint = { ts: number; onprem: number; cloud: number };
-export type ThroughputPoint = { ts: number; genRate: number; onpremCommit: number; cloudCommit: number };
+export type ThroughputPoint = { ts: number; genRate: number; onpremCommit: number; cloudCommit: number; estimated: boolean };
 export type View = 'overview' | 'load-control' | 'chaos' | 'compliance' | 'autoscale' | 'about';
 
 export default function App() {
@@ -51,11 +51,18 @@ export default function App() {
               onprem: (onprem.committedTps ?? 0) * 60,
               cloud: (cloud.committedTps ?? 0) * 60,
             }].slice(-MAX_HISTORY);
+            const genTps        = onprem.generatorTps ?? 0;
+            const onpremW       = onprem.trafficWeight ?? 100;
+            const cloudW        = cloud.trafficWeight  ?? 0;
+            const onpremCommitRaw = onprem.committedTps ?? 0;
+            const cloudCommitRaw  = cloud.committedTps  ?? 0;
+            const usingEstimate = onpremCommitRaw === 0 && cloudCommitRaw === 0;
             throughputHistory.current = [...throughputHistory.current, {
               ts,
-              genRate: onprem.generatorTps ?? 0,
-              onpremCommit: onprem.committedTps ?? 0,
-              cloudCommit: cloud.committedTps ?? 0,
+              genRate:      genTps,
+              onpremCommit: usingEstimate ? genTps * (onpremW / 100) : onpremCommitRaw,
+              cloudCommit:  usingEstimate ? genTps * (cloudW  / 100) : cloudCommitRaw,
+              estimated:    usingEstimate,
             }].slice(-MAX_HISTORY);
           }
           setPayload(data);

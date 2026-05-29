@@ -25,7 +25,7 @@ export default function ThroughputChart({ history }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  const hasCommitData = history.some(p => p.onpremCommit > 0 || p.cloudCommit > 0);
+  const isEstimated = history.length > 0 && history[history.length - 1].estimated;
   const maxY = history.length > 0
     ? Math.max(ONPREM_CAPACITY_TPS, ...history.map(p => Math.max(p.genRate, p.onpremCommit, p.cloudCommit)))
     : ONPREM_CAPACITY_TPS;
@@ -43,8 +43,8 @@ export default function ThroughputChart({ history }: Props) {
       </div>
       <div style={{ padding: '0 12px 8px', fontSize: 12, color: '#6a6e73', display: 'flex', justifyContent: 'space-between' }}>
         <span>Gap between generator and commit lines = processing backlog. Gap closes as cloud scales up.</span>
-        {!hasCommitData && history.some(p => p.genRate > 0) && (
-          <span style={{ color: '#f4c14580', fontStyle: 'italic' }}>Commit metrics available after backend rebuild</span>
+        {isEstimated && (
+          <span style={{ color: '#f4c14580', fontStyle: 'italic' }}>Commit lines estimated from traffic weights · real data when ledger active</span>
         )}
       </div>
       <div ref={containerRef}>
