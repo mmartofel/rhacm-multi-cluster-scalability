@@ -19,7 +19,7 @@ patches:
 - patch: |-
     - op: replace
       path: /data/TPS_RATE
-      value: "50"
+      value: "0"
   target:
     kind: ConfigMap
     name: transaction-generator-config

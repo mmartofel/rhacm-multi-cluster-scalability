@@ -19,7 +19,8 @@ export default function LoadControlPanel({ payload }: Props) {
     setPending(tps);
     setStatus(null);
     try {
-      const res = await fetch(`/api/generator/tps/${tps}`, { method: 'PUT' });
+      // Fan-out to both clusters: backend splits ≤100 TPS onprem, remainder cloud.
+      const res = await fetch(`/api/backend/generator/tps/${tps}`, { method: 'PUT' });
       if (res.ok) {
         setStatus({ msg: `Generator rate set to ${tps} TPS`, ok: true });
       } else {

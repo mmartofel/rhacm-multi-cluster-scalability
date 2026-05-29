@@ -6,6 +6,11 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,6 +65,22 @@ public class GatewayResource {
                 "cluster", cluster,
                 "trafficWeight", trafficWeight.get()
         )).build();
+    }
+
+    @PUT
+    @Path("/generator/tps/{rate}")
+    public Response setGeneratorTps(@PathParam("rate") int rate) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("http://transaction-generator.banking-demo.svc.cluster.local:8080/api/generator/tps/" + Math.max(0, rate)))
+                    .timeout(Duration.ofMillis(800))
+                    .PUT(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            client.send(req, HttpResponse.BodyHandlers.discarding());
+        } catch (Exception ignored) {
+        }
+        return Response.ok(Map.of("tpsRate", rate)).build();
     }
 
     @GET

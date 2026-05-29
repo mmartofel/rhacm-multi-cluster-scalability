@@ -5,7 +5,7 @@ metadata:
   namespace: banking-infra
 spec:
   version: 4.2.0
-  replicas: 1
+  replicas: 0
   target:
     alias: cloud
     bootstrapServers: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
@@ -29,3 +29,5 @@ spec:
         sync.topic.acls.enabled: "false"
         # Keep original topic names on cloud (no onprem. prefix)
         replication.policy.class: org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+        # Start from latest if no stored offset exists (prevents backlog replay after MM2 wipe)
+        auto.offset.reset: latest

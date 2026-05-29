@@ -43,6 +43,23 @@ public class DashboardResource {
         )).build();
     }
 
+    // Splits total TPS across clusters: ≤100 TPS → all onprem; above 100 TPS → 100 onprem + remainder cloud.
+    @PUT
+    @Path("/generator/tps/{total}")
+    public Response setGeneratorTps(@PathParam("total") int total) {
+        int onpremTps = Math.min(total, 100);
+        int cloudTps  = Math.max(0, total - 100);
+
+        httpPut(onpremGatewayUrl + "/api/gateway/generator/tps/" + onpremTps, "");
+        httpPut(cloudGatewayUrl  + "/api/gateway/generator/tps/" + cloudTps,  "");
+
+        return Response.ok(Map.of(
+                "total", total,
+                "onpremTps", onpremTps,
+                "cloudTps", cloudTps
+        )).build();
+    }
+
     private void httpPut(String url, String jsonBody) {
         try {
             HttpClient client = HttpClient.newHttpClient();
