@@ -97,7 +97,7 @@ export default function ClusterCards({ payload }: Props) {
   const genTps = payload?.clusters.find(c => c.cluster === 'onprem')?.generatorTps ?? 0;
   const isBurst = genTps > ONPREM_CAPACITY_TPS;
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16, flex: 1 }}>
       <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 14 }}>Cluster Status</div>
       {payload ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
