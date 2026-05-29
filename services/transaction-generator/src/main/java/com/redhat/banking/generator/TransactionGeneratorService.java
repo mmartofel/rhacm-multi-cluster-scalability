@@ -3,6 +3,7 @@ package com.redhat.banking.generator;
 import com.redhat.banking.TransactionEvent;
 import com.redhat.banking.TransactionType;
 import io.quarkus.scheduler.Scheduled;
+import java.util.concurrent.TimeUnit;
 import io.smallrye.reactive.messaging.kafka.api.OutgoingKafkaRecordMetadata;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -42,7 +43,7 @@ public class TransactionGeneratorService {
         return a;
     }
 
-    @Scheduled(every = "1s")
+    @Scheduled(every = "1s", delay = 5, delayUnit = TimeUnit.SECONDS)
     void generateBatch() {
         int rate = tpsRate;
         for (int i = 0; i < rate; i++) {

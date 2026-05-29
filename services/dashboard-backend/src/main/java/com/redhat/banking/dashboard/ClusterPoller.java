@@ -42,7 +42,7 @@ public class ClusterPoller {
     private final Map<String, Long> prevProcessed = new ConcurrentHashMap<>();
     private volatile long prevPollMs = 0;
 
-    @Scheduled(every = "PT0.5S")
+    @Scheduled(every = "1s")
     void poll() {
         long nowMs = Instant.now().toEpochMilli();
         double intervalSecs = prevPollMs > 0 ? (nowMs - prevPollMs) / 1000.0 : 0.5;
