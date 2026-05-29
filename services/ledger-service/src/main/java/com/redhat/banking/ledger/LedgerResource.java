@@ -20,10 +20,6 @@ public class LedgerResource {
     @Path("/summary")
     public Response summary() {
         Long totalEntries = LedgerEntry.count();
-        Object totalVolume = LedgerEntry.getEntityManager()
-                .createNativeQuery("SELECT COALESCE(SUM(ABS(running_balance - LAG(running_balance, 1, running_balance) OVER (PARTITION BY account_id ORDER BY as_of))), 0) FROM ledger_entries")
-                .getSingleResult();
-
         return Response.ok(Map.of(
                 "cluster", System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown"),
                 "totalLedgerEntries", totalEntries,
