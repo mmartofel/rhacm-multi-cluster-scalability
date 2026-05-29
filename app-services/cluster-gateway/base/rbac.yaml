@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-gateway
+  namespace: banking-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-gateway-scaling-reader
+  namespace: banking-demo
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-gateway-scaling-reader
+  namespace: banking-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-gateway-scaling-reader
+subjects:
+- kind: ServiceAccount
+  name: cluster-gateway
+  namespace: banking-demo

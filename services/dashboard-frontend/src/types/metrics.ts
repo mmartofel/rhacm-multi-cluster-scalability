@@ -10,6 +10,8 @@ export interface ClusterMetrics {
   timestamp: number;
   committedTps: number;
   generatorTps: number;
+  processorReplicas: number;
+  accountReplicas: number;
 }
 
 export interface MetricsPayload {

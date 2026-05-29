@@ -15,12 +15,14 @@ import ClusterCards from './components/ClusterCards';
 import LoadControlPanel from './components/LoadControlPanel';
 import ChaosPanel from './components/ChaosPanel';
 import ComplianceWidget from './components/ComplianceWidget';
+import AutoscaleWatchPanel from './components/AutoscaleWatchPanel';
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/metrics`;
 const MAX_HISTORY = 360;
 
 export type TpmPoint = { ts: number; onprem: number; cloud: number };
 export type ThroughputPoint = { ts: number; genRate: number; onpremCommit: number; cloudCommit: number; estimated: boolean };
+export type AutoscalePoint = { ts: number; onpremProcessor: number; cloudProcessor: number; onpremAccount: number; cloudAccount: number };
 export type View = 'overview' | 'load-control' | 'chaos' | 'compliance' | 'autoscale' | 'about';
 
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
 
   const tpmHistory = useRef<TpmPoint[]>([]);
   const throughputHistory = useRef<ThroughputPoint[]>([]);
+  const autoscaleHistory = useRef<AutoscalePoint[]>([]);
   const lastAutoWeight = useRef<number>(-1);
 
   useEffect(() => {
@@ -63,6 +66,13 @@ export default function App() {
               onpremCommit: usingEstimate ? genTps * (onpremW / 100) : onpremCommitRaw,
               cloudCommit:  usingEstimate ? genTps * (cloudW  / 100) : cloudCommitRaw,
               estimated:    usingEstimate,
+            }].slice(-MAX_HISTORY);
+            autoscaleHistory.current = [...autoscaleHistory.current, {
+              ts,
+              onpremProcessor: onprem.processorReplicas ?? -1,
+              cloudProcessor:  cloud.processorReplicas  ?? -1,
+              onpremAccount:   onprem.accountReplicas   ?? -1,
+              cloudAccount:    cloud.accountReplicas    ?? -1,
             }].slice(-MAX_HISTORY);
           }
           setPayload(data);
@@ -135,7 +145,7 @@ export default function App() {
       case 'compliance':
         return <ComplianceWidget />;
       case 'autoscale':
-        return <Placeholder title="Autoscale Watch" body={'Real-time KEDA scaler activity — coming soon.\n\nThis view will show pod replica counts over time for\ntransaction-processor on both clusters as Kafka consumer\nlag drives horizontal scale-out and scale-in.'} />;
+        return <AutoscaleWatchPanel history={autoscaleHistory.current} payload={payload} />;
       case 'about':
         return <Placeholder title="Banking Demo — Multi-Cluster Scalability" body={'AWS (on-prem sim)  ·  GCP (cloud burst)  ·  Red Hat Service Interconnect mTLS\n\nKafka 4.2 (KRaft)  ·  PostgreSQL HA  ·  KEDA autoscaling  ·  Argo CD GitOps  ·  RHACM 2.16\n\nTransactions generated on AWS → replicated to GCP via MirrorMaker 2\nProcessors on both clusters write commits back to AWS PostgreSQL via RHSI\nKEDA scales cloud processors 0 → 20 replicas based on consumer lag'} />;
       default:

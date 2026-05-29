@@ -15,6 +15,7 @@ spec:
       labels:
         app: cluster-gateway
     spec:
+      serviceAccountName: cluster-gateway
       containers:
       - name: cluster-gateway
         image: quay.io/mmartofe/banking-demo-cluster-gateway:latest
