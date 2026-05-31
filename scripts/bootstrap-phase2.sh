@@ -215,24 +215,31 @@ PGO_SECRET=$(oc get secret -n banking-infra --context onprem \
 
 ok "Using PGO secret: $PGO_SECRET"
 
+# Each cluster's PGO instance manages its own password independently.
+# Read user from onprem (same app user name on both), but read passwords
+# from EACH cluster's own PGO secret so they match that cluster's pg_authid.
 PG_USER=$(oc get secret "$PGO_SECRET" -n banking-infra --context onprem -o jsonpath='{.data.user}' | base64 -d)
-PG_PASS=$(oc get secret "$PGO_SECRET" -n banking-infra --context onprem -o jsonpath='{.data.password}' | base64 -d)
 
-# Create credentials Secret on onprem (banking-demo namespace)
+PG_PASS_ONPREM=$(oc get secret "$PGO_SECRET" -n banking-infra --context onprem -o jsonpath='{.data.password}' | base64 -d)
 oc create secret generic postgresql-credentials \
   --from-literal=user="$PG_USER" \
-  --from-literal=password="$PG_PASS" \
+  --from-literal=password="$PG_PASS_ONPREM" \
   -n banking-demo --context onprem \
   --dry-run=client -o yaml | oc apply -f - --context onprem
+ok "postgresql-credentials applied on onprem"
 
-# Create the same Secret on cloud (transaction-processor writes to onprem PG via Skupper)
+# Cloud PGO assigns a different password than onprem even for the same user.
+# The cloud ledger-service connects to the local cloud PostgreSQL standby, so
+# it must use the cloud-local PGO password, not the onprem one.
+PG_PASS_CLOUD=$(oc get secret "$PGO_SECRET" -n banking-infra --context cloud -o jsonpath='{.data.password}' | base64 -d)
 oc create secret generic postgresql-credentials \
   --from-literal=user="$PG_USER" \
-  --from-literal=password="$PG_PASS" \
+  --from-literal=password="$PG_PASS_CLOUD" \
   -n banking-demo --context cloud \
   --dry-run=client -o yaml | oc apply -f - --context cloud
+ok "postgresql-credentials applied on cloud"
 
-ok "postgresql-credentials secret created on both clusters"
+ok "postgresql-credentials secret created on both clusters (cluster-local passwords)"
 
 # ─── Copy quay pull secret ────────────────────────────────────────────────────
 log "Step 6 — Ensuring quay-pull-secret exists in banking-demo"
