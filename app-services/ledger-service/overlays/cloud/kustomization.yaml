@@ -18,7 +18,7 @@ patches:
       value: "cloud"
     - op: replace
       path: /spec/template/spec/containers/0/env/3/value
-      value: "jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres"
+      value: "jdbc:postgresql://postgresql-primary.banking-infra.svc.cluster.local:5432/postgres"
   target:
     kind: Deployment
     name: ledger-service
