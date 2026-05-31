@@ -5,10 +5,10 @@ metadata:
   namespace: openshift-gitops
 spec:
   generators:
-  - list:
-      elements:
-      - cluster: cloud
-        server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+  - clusters:
+      selector:
+        matchLabels:
+          cluster-role: cloud
   template:
     metadata:
       name: banking-mirrormaker2

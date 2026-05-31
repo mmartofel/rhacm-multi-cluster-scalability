@@ -53,29 +53,57 @@ wait_for_jsonpath() {
   printf ' %s\n' "$desc"
 }
 
-# ── Step 1: Register GCP cluster with Argo CD ──────────────────────────────
-log "Step 1: Register cloud cluster with Argo CD (RHACM GitOpsCluster)"
+# ── Derive cluster API server URLs from kubeconfig at runtime ─────────────
+# kubeconfig-onprem and kubeconfig-cloud are the single source of truth for
+# cluster endpoints — no URLs are hardcoded anywhere in scripts or manifests.
+CLOUD_SERVER=$(KUBECONFIG="${REPO_ROOT}/kubeconfig-cloud" \
+  oc config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
-# Check if already registered
-if oc --context "${ONPREM}" get secret cloud-cluster-secret \
-    -n "${GITOPS_NS}" &>/dev/null; then
-  ok "cloud cluster already registered with Argo CD — skipping"
-else
-  # Create a ServiceAccount + token on the cloud cluster for Argo CD
-  oc --context "${CLOUD}" create serviceaccount argocd-manager \
-    -n kube-system --dry-run=client -o yaml \
-    | oc --context "${CLOUD}" apply -f -
+info "onprem cluster: https://kubernetes.default.svc (in-cluster)"
+info "cloud cluster:  ${CLOUD_SERVER}"
 
-  oc --context "${CLOUD}" create clusterrolebinding argocd-manager-binding \
-    --clusterrole=cluster-admin \
-    --serviceaccount=kube-system:argocd-manager \
-    --dry-run=client -o yaml \
-    | oc --context "${CLOUD}" apply -f -
+# ── Step 1: Register both clusters with Argo CD ───────────────────────────
+log "Step 1: Register clusters with Argo CD via labeled cluster secrets"
 
-  CLOUD_TOKEN=$(oc --context "${CLOUD}" create token argocd-manager \
-    -n kube-system --duration=8760h)
+# onprem: Argo CD runs in-cluster on onprem, so server is the k8s API alias.
+# Always apply (idempotent) so the cluster-role label is always present.
+oc --context "${ONPREM}" apply -n "${GITOPS_NS}" -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: onprem-cluster-secret
+  namespace: ${GITOPS_NS}
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+    cluster-role: onprem
+type: Opaque
+stringData:
+  name: onprem
+  server: https://kubernetes.default.svc
+  config: '{"tlsClientConfig":{"insecure":false}}'
+EOF
+ok "onprem cluster secret applied (cluster-role=onprem)"
 
-  oc --context "${ONPREM}" apply -n "${GITOPS_NS}" -f - <<EOF
+# cloud: create argocd-manager SA + CRB on cloud cluster (idempotent),
+# then generate a fresh token and always recreate the secret so the
+# server URL and token stay current across cluster rebuilds.
+oc --context "${CLOUD}" create serviceaccount argocd-manager \
+  -n kube-system --dry-run=client -o yaml \
+  | oc --context "${CLOUD}" apply -f -
+
+oc --context "${CLOUD}" create clusterrolebinding argocd-manager-binding \
+  --clusterrole=cluster-admin \
+  --serviceaccount=kube-system:argocd-manager \
+  --dry-run=client -o yaml \
+  | oc --context "${CLOUD}" apply -f -
+
+CLOUD_TOKEN=$(oc --context "${CLOUD}" create token argocd-manager \
+  -n kube-system --duration=8760h)
+
+oc --context "${ONPREM}" delete secret cloud-cluster-secret \
+  -n "${GITOPS_NS}" --ignore-not-found
+
+oc --context "${ONPREM}" apply -n "${GITOPS_NS}" -f - <<EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -83,10 +111,11 @@ metadata:
   namespace: ${GITOPS_NS}
   labels:
     argocd.argoproj.io/secret-type: cluster
+    cluster-role: cloud
 type: Opaque
 stringData:
   name: cloud
-  server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+  server: ${CLOUD_SERVER}
   config: |
     {
       "bearerToken": "${CLOUD_TOKEN}",
@@ -95,24 +124,33 @@ stringData:
       }
     }
 EOF
-  ok "cloud cluster registered with Argo CD"
-fi
+ok "cloud cluster secret applied (cluster-role=cloud, server=${CLOUD_SERVER})"
 
-# ── Step 1b: Argo CD RBAC for banking-infra ───────────────────────────────
-log "Step 1b: Argo CD RBAC for banking-infra on both clusters"
-# Argo CD SA needs admin in banking-infra before it can sync Kafka/PG/Apicurio
+# ── Step 1b: Argo CD RBAC for banking-infra and banking-demo ─────────────
+log "Step 1b: Argo CD RBAC for banking-infra and banking-demo on both clusters"
+# Argo CD SA needs admin in both namespaces before ApplicationSets sync.
+# banking-demo RBAC is applied here (not in phase 2) because banking-demo-appset
+# is applied in phase 2 — RBAC must pre-exist so the first sync succeeds.
 oc --context "${ONPREM}" apply \
   -f "${REPO_ROOT}/infra/argocd/banking-infra-rbac.yaml"
 oc --context "${CLOUD}" apply \
   -f "${REPO_ROOT}/infra/argocd/banking-infra-rbac.yaml"
-ok "Argo CD admin RoleBinding applied in banking-infra on both clusters"
-
-# ── Step 2: Apply Argo CD ApplicationSets ─────────────────────────────────
-log "Step 2: Apply Argo CD ApplicationSets (Kafka, PostgreSQL, Apicurio, MM2)"
 oc --context "${ONPREM}" apply \
-  -f "${REPO_ROOT}/gitops/applicationsets/" \
-  -n "${GITOPS_NS}"
-ok "ApplicationSets applied"
+  -f "${REPO_ROOT}/infra/argocd/banking-demo-rbac.yaml"
+oc --context "${CLOUD}" apply \
+  -f "${REPO_ROOT}/infra/argocd/banking-demo-rbac.yaml"
+ok "Argo CD admin RoleBindings applied in banking-infra and banking-demo on both clusters"
+
+# ── Step 2: Apply infra Argo CD ApplicationSets ───────────────────────────
+log "Step 2: Apply infra Argo CD ApplicationSets (Kafka, PostgreSQL, Apicurio, MM2)"
+# banking-demo-appset.yaml is intentionally excluded here — it is applied in
+# phase 2 after images are built and DB schema is initialised.
+for appset in kafka-appset postgresql-appset apicurio-appset mirrormaker2-appset; do
+  oc --context "${ONPREM}" apply \
+    -f "${REPO_ROOT}/gitops/applicationsets/${appset}.yaml" \
+    -n "${GITOPS_NS}"
+done
+ok "Infra ApplicationSets applied"
 info "Argo CD will sync Kafka → PostgreSQL → Apicurio → MirrorMaker2"
 info "Monitor: oc --context onprem get applications -n openshift-gitops"
 

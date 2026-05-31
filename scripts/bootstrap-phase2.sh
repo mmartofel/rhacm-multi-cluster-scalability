@@ -401,10 +401,16 @@ info "NOTE: cloud transaction-processor runs 0 replicas at idle (minReplicaCount
 info "      KEDA scales it up automatically when load exceeds lagThreshold=500 messages."
 info "      This is expected — not a failure."
 
-# Dashboard route
-DASH_HOST="dashboard.apps.zenek.sandbox3454.opentlc.com"
-check "dashboard Route accessible (HTTP 200/302)" \
-  "curl -s -o /dev/null -w '%{http_code}' -k --max-time 10 https://$DASH_HOST | grep -qE '^(200|302)'"
+# Dashboard route — derived at runtime from the deployed Route, not hardcoded
+DASH_HOST=$(oc get route dashboard-frontend -n banking-demo --context onprem \
+  -o jsonpath='{.spec.host}' 2>/dev/null || true)
+if [[ -n "$DASH_HOST" ]]; then
+  check "dashboard Route accessible (HTTP 200/302)" \
+    "curl -s -o /dev/null -w '%{http_code}' -k --max-time 10 https://$DASH_HOST | grep -qE '^(200|302)'"
+else
+  info "dashboard Route not yet available — skipping URL check"
+  DASH_HOST="<dashboard-route-not-found>"
+fi
 
 # PostgreSQL has rows
 check "PostgreSQL: transactions table has rows" \

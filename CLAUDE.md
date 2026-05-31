@@ -89,8 +89,8 @@ Two separate kubeconfig files — one per cluster. `oc` merges them natively at 
 
 | Context | Cloud | Cluster endpoint |
 |---|---|---|
-| `onprem` | AWS (EC2) | `https://api.zenek.sandbox3454.opentlc.com:6443` |
-| `cloud` | GCP (GCE) | `https://api.zenek.ln6np.gcp.redhatworkshops.io:6443` |
+| `onprem` | AWS (EC2) | `https://api.zenek.sandbox5552.opentlc.com:6443` |
+| `cloud` | GCP (GCE) | `https://api.zenek.tcw5b.gcp.redhatworkshops.io:6443` |
 
 **Interactive setup (one-liner):**
 ```bash

@@ -5,7 +5,7 @@ metadata:
   namespace: openshift-gitops
 spec:
   generators:
-  # Services deployed to BOTH clusters (with per-cluster overlays)
+  # Services deployed to onprem cluster
   - matrix:
       generators:
       - list:
@@ -15,34 +15,50 @@ spec:
           - service: account-service
           - service: ledger-service
           - service: cluster-gateway
+      - clusters:
+          selector:
+            matchLabels:
+              cluster-role: onprem
+          values:
+            overlay: overlays/onprem
+  # Services deployed to cloud cluster
+  - matrix:
+      generators:
       - list:
           elements:
-          - cluster: onprem
-            server: https://kubernetes.default.svc
-            overlay: overlays/onprem
-          - cluster: cloud
-            server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+          - service: transaction-generator
+          - service: transaction-processor
+          - service: account-service
+          - service: ledger-service
+          - service: cluster-gateway
+      - clusters:
+          selector:
+            matchLabels:
+              cluster-role: cloud
+          values:
             overlay: overlays/cloud
-  # onprem-only services (no cloud deployment)
-  - list:
-      elements:
-      - service: dashboard-backend
-        cluster: onprem
-        server: https://kubernetes.default.svc
-        overlay: base
-      - service: dashboard-frontend
-        cluster: onprem
-        server: https://kubernetes.default.svc
-        overlay: base
+  # onprem-only services (dashboard)
+  - matrix:
+      generators:
+      - list:
+          elements:
+          - service: dashboard-backend
+          - service: dashboard-frontend
+      - clusters:
+          selector:
+            matchLabels:
+              cluster-role: onprem
+          values:
+            overlay: base
   template:
     metadata:
-      name: 'banking-{{service}}-{{cluster}}'
+      name: 'banking-{{service}}-{{name}}'
     spec:
       project: default
       source:
         repoURL: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
         targetRevision: HEAD
-        path: 'app-services/{{service}}/{{overlay}}'
+        path: 'app-services/{{service}}/{{values.overlay}}'
       destination:
         server: '{{server}}'
         namespace: banking-demo

@@ -5,10 +5,10 @@ metadata:
   namespace: openshift-gitops
 spec:
   generators:
-  - list:
-      elements:
-      - cluster: onprem
-        server: https://kubernetes.default.svc
+  - clusters:
+      selector:
+        matchLabels:
+          cluster-role: onprem
   template:
     metadata:
       name: banking-apicurio

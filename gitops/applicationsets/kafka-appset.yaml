@@ -5,23 +5,27 @@ metadata:
   namespace: openshift-gitops
 spec:
   generators:
-  - list:
-      elements:
-      - cluster: onprem
-        server: https://kubernetes.default.svc
+  - clusters:
+      selector:
+        matchLabels:
+          cluster-role: onprem
+      values:
         overlay: onprem
-      - cluster: cloud
-        server: https://api.zenek.ln6np.gcp.redhatworkshops.io:6443
+  - clusters:
+      selector:
+        matchLabels:
+          cluster-role: cloud
+      values:
         overlay: cloud
   template:
     metadata:
-      name: 'banking-kafka-{{cluster}}'
+      name: 'banking-kafka-{{name}}'
     spec:
       project: default
       source:
         repoURL: https://github.com/mmartofel/rhacm-multi-cluster-scalability.git
         targetRevision: HEAD
-        path: 'infra/kafka/overlays/{{overlay}}'
+        path: 'infra/kafka/overlays/{{values.overlay}}'
       destination:
         server: '{{server}}'
         namespace: banking-infra
