@@ -9,7 +9,7 @@ patches:
       value: 1
     - op: replace
       path: /spec/template/spec/containers/0/env/0/value
-      value: "kafka-bootstrap.banking-infra.svc.cluster.local:9092"
+      value: "banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092"
     - op: replace
       path: /spec/template/spec/containers/0/env/1/value
       value: "http://apicurio-registry.banking-infra.svc.cluster.local:8080"
@@ -18,7 +18,7 @@ patches:
       value: "cloud"
     - op: replace
       path: /spec/template/spec/containers/0/env/3/value
-      value: "jdbc:postgresql://postgresql-primary.banking-infra.svc.cluster.local:5432/postgres"
+      value: "jdbc:postgresql://postgres-primary.banking-infra.svc.cluster.local:5432/postgres"
   target:
     kind: Deployment
     name: ledger-service

@@ -73,3 +73,9 @@ spec:
         kind: Deployment
         jsonPointers:
         - /spec/replicas
+      - group: route.openshift.io
+        kind: Route
+        jsonPointers:
+        - /spec/host
+        - /spec/tls/certificate
+        - /spec/tls/key

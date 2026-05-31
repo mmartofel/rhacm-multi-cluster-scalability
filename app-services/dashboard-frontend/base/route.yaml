@@ -6,7 +6,6 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  host: dashboard.apps.zenek.sandbox3454.opentlc.com
   to:
     kind: Service
     name: dashboard-frontend
