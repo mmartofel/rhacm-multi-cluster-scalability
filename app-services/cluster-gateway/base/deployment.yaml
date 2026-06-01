@@ -27,6 +27,8 @@ spec:
           value: onprem
         - name: TRAFFIC_WEIGHT
           value: "100"
+        - name: QUARKUS_VERTX_MAX_EVENT_LOOP_EXECUTE_TIME
+          value: "PT10S"
         resources:
           requests:
             cpu: 100m
