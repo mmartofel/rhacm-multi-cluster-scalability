@@ -17,6 +17,7 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 @ApplicationScoped
 public class TransactionProcessor {
@@ -59,7 +60,7 @@ public class TransactionProcessor {
             int inserted = em.createNativeQuery(
                     "INSERT INTO transactions (transaction_id, account_id, type, amount, balance_after, processed_at, source_cluster) " +
                     "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (transaction_id) DO NOTHING")
-                    .setParameter(1, event.getTransactionId())
+                    .setParameter(1, UUID.fromString(event.getTransactionId()))
                     .setParameter(2, event.getAccountId())
                     .setParameter(3, event.getType().name())
                     .setParameter(4, BigDecimal.valueOf(event.getAmount()))

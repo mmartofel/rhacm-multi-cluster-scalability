@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "transactions")
@@ -12,7 +13,7 @@ public class Transaction extends PanacheEntityBase {
 
     @Id
     @Column(name = "transaction_id", nullable = false)
-    public String transactionId;
+    public UUID transactionId;
 
     @Column(name = "account_id", nullable = false)
     public String accountId;
