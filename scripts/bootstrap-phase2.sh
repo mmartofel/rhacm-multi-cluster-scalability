@@ -401,7 +401,7 @@ info "      KEDA scales it up automatically when load exceeds lagThreshold=500 m
 info "      This is expected — not a failure."
 
 # Dashboard route — derived at runtime from the deployed Route, not hardcoded
-DASH_HOST=$(oc get route dashboard-frontend -n banking-demo --context onprem \
+DASH_HOST=$(oc get route dashboard -n banking-demo --context onprem \
   -o jsonpath='{.spec.host}' 2>/dev/null || true)
 if [[ -n "$DASH_HOST" ]]; then
   check "dashboard Route accessible (HTTP 200/302)" \
