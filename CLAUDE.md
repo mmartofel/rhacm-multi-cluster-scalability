@@ -20,7 +20,7 @@ Cross-cluster connectivity is provided by **Red Hat Service Interconnect (RHSI)*
 | `transaction-generator` | Emits synthetic DEBIT/CREDIT `TransactionEvent`s to Kafka at configurable TPS | JVM mode; ConfigMap-driven TPS |
 | `transaction-processor` | Consumes Kafka, validates balance, writes to PostgreSQL, emits `TransactionCommitted` | Native mode + KEDA; GCP instance writes to AWS PostgreSQL via RHSI |
 | `account-service` | Balance reads via Quarkus `@CacheResult` in-process cache; reads PostgreSQL directly | AWS: HPA CPU 60%; GCP: 0–5 replicas |
-| `ledger-service` | Authoritative running balance; serves REST to dashboard-backend | GCP instance reads from PostgreSQL standby (read-only) |
+| `ledger-service` | Authoritative running balance; serves REST to dashboard-backend | GCP instance reads from onprem PostgreSQL via RHSI (`postgresql-primary`) |
 | `cluster-gateway` | Traffic weight control; aggregated `/health` and `/metrics` | Manages Istio VirtualService weights |
 | `dashboard-backend` | Polls both clusters every 500ms, aggregates, streams `MetricsPayload` via WebSocket | Quarkus WebSocket |
 | `dashboard-frontend` | Live dashboard: cluster map, TPS gauges, chaos panel, compliance widget | React 18 + Patternfly 5 |
@@ -173,3 +173,15 @@ Both `KAFKA_BOOTSTRAP_SERVERS` (Deployment env var) and `bootstrapServers` (KEDA
 
 **`grep -P` (Perl regex) is not available on macOS:**
 Bootstrap script checkpoint sections must use `grep -qE` instead of `grep -qP`. BSD grep (macOS default) does not support the `-P` flag; every check silently fails and the checkpoint reports all deployments as down even when they are fully healthy. `grep -qE '[1-9]'` is POSIX-compatible and works on both Linux and macOS.
+
+**Cloud app services all connect to onprem PG via RHSI — never the local cloud PGO:**
+All cloud application services (`account-service`, `transaction-processor`, `ledger-service`) connect to the onprem PostgreSQL primary via the RHSI Skupper listener at `postgresql-primary.banking-infra.svc.cluster.local:5432`. The cloud PGO instance (`postgres-primary`) runs independently with no application schema and a separate PGO-managed password. Do not point any cloud service DATASOURCE_URL at `postgres-primary`; use `postgresql-primary` in every cloud overlay.
+
+**`postgresql-credentials` on cloud must carry the onprem PGO password:**
+The `postgresql-credentials` secret in `banking-demo` on cloud must be populated with the onprem PGO password (from `postgres-pguser-postgres` in `banking-infra` on onprem), because all cloud services authenticate against the onprem PostgreSQL via RHSI. Using the cloud-local PGO password causes `FATAL: password authentication failed` on every cloud service. `bootstrap-phase2.sh` applies the same onprem password to both clusters.
+
+**`transaction_id` Avro String must be cast to `java.util.UUID` before native INSERT:**
+The `TransactionEvent` Avro schema declares `transactionId` as Avro `string`, so `getTransactionId()` returns a Java `String`. PostgreSQL's `UUID` column type rejects a bound `character varying` parameter without an explicit cast. The native INSERT in `TransactionProcessor.java` must pass `UUID.fromString(event.getTransactionId())` as parameter 1. Binding the raw `String` causes `ERROR: column "transaction_id" is of type uuid but expression is of type character varying` and puts the pod in CrashLoopBackOff on both clusters.
+
+**RESTEasy Reactive dispatches JAX-RS methods on the event loop — add `@Blocking` for blocking I/O:**
+In Quarkus 3.x with RESTEasy Reactive, resource methods that return plain (non-reactive) types are still dispatched on the Vert.x event loop by default. Any method that performs blocking I/O (e.g. `java.net.http.HttpClient.send()`, synchronous REST calls) must be annotated with `@Blocking` (`io.smallrye.common.annotation.Blocking`) so the call is dispatched to a worker thread. Without it the event loop stalls and Vert.x's blocked-thread-checker fires repeated WARNs.
