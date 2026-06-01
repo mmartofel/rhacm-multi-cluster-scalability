@@ -28,7 +28,7 @@ patches:
       value: 0
     - op: replace
       path: /spec/maxReplicaCount
-      value: 20
+      value: 6
     - op: replace
       path: /spec/triggers/0/metadata/bootstrapServers
       value: "banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092"
