@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 CREATE TABLE IF NOT EXISTS ledger_entries (
-  entry_id        BIGSERIAL      PRIMARY KEY,
+  id              BIGSERIAL      PRIMARY KEY,
   account_id      VARCHAR(20)    NOT NULL,
   running_balance NUMERIC(15,2)  NOT NULL,
   as_of           TIMESTAMPTZ    DEFAULT now(),
@@ -192,7 +192,8 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
 );
 
 -- Hibernate 6 sequence (Panache SequenceStyleGenerator, allocationSize=50)
-CREATE SEQUENCE IF NOT EXISTS "ledger_entries_SEQ" START 1 INCREMENT BY 50;
+-- Must be lowercase/unquoted: nextval('ledger_entries_SEQ') folds to ledger_entries_seq
+CREATE SEQUENCE IF NOT EXISTS ledger_entries_seq START 1 INCREMENT BY 50;
 
 -- Seed 100 test accounts (idempotent)
 INSERT INTO accounts (account_id, balance)
