@@ -19,11 +19,6 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/7/value
       value: "20"
-    - op: add
-      path: /spec/template/spec/containers/0/env/-
-      value:
-        name: MP_MESSAGING_INCOMING_TRANSACTIONS_IN_CONCURRENCY
-        value: "10"
   target:
     kind: Deployment
     name: transaction-processor
