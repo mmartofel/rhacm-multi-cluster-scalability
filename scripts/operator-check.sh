@@ -14,7 +14,6 @@ SHARED_OPS=(
   amqstreams
   cert-manager
   custom-metrics-autoscaler
-  openshift-pipelines-operator-rh
   postgresoperator
   rhacs-operator
   skupper-operator
@@ -24,6 +23,7 @@ SHARED_OPS=(
 HUB_OPS=(
   advanced-cluster-management
   openshift-gitops-operator
+  openshift-pipelines-operator-rh
 )
 
 any_missing=0

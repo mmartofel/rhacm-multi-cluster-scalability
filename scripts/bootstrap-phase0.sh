@@ -39,8 +39,20 @@ log "Step a: Operator check"
 "${SCRIPT_DIR}/operator-check.sh"
 ok "All operators present on both contexts"
 
-# ── Step b: RHACM MultiClusterHub on onprem ────────────────────────────────
-log "Step b: MultiClusterHub (context: ${ONPREM})"
+# ── Step b: Enable Pipelines console plugin on onprem ─────────────────────
+log "Step b: Enable Pipelines console plugin (context: ${ONPREM})"
+existing_plugins=$(oc --context "${ONPREM}" get console.operator.openshift.io cluster \
+  -o jsonpath='{range .spec.plugins[*]}{@}{"\n"}{end}' 2>/dev/null || true)
+if echo "$existing_plugins" | grep -q "^pipelines-console-plugin$"; then
+  ok "pipelines-console-plugin already enabled in Console CR"
+else
+  oc --context "${ONPREM}" patch console.operator.openshift.io cluster --type=json \
+    -p '[{"op":"add","path":"/spec/plugins/-","value":"pipelines-console-plugin"}]'
+  ok "pipelines-console-plugin enabled"
+fi
+
+# ── Step c: RHACM MultiClusterHub on onprem ────────────────────────────────
+log "Step c: MultiClusterHub (context: ${ONPREM})"
 oc --context "${ONPREM}" apply -f "${REPO_ROOT}/infra/rhacm/multiclusterhub.yaml"
 
 printf 'Waiting for MultiClusterHub phase=Running (up to 20 min)'
@@ -50,8 +62,8 @@ wait_for "MultiClusterHub" 1200 \
     -o jsonpath='{.status.phase}' 2>/dev/null | grep -q '^Running$'"
 ok "MultiClusterHub running"
 
-# ── Step c: Import GCP cluster ─────────────────────────────────────────────
-log "Step c: ManagedCluster import (hub: ${ONPREM}, spoke: ${CLOUD})"
+# ── Step d: Import GCP cluster ─────────────────────────────────────────────
+log "Step d: ManagedCluster import (hub: ${ONPREM}, spoke: ${CLOUD})"
 
 if oc --context "${ONPREM}" get managedcluster cloud \
     -o jsonpath='{.status.conditions[?(@.type=="ManagedClusterJoined")].status}' \
@@ -93,7 +105,7 @@ else
 fi
 
 # ── Step d: OpenShift GitOps readiness ─────────────────────────────────────
-log "Step d: OpenShift GitOps (context: ${ONPREM})"
+log "Step e: OpenShift GitOps (context: ${ONPREM})"
 # The openshift-gitops-operator auto-creates an ArgoCD instance; wait for it.
 printf 'Waiting for openshift-gitops-server deployment'
 wait_for "openshift-gitops-server" 600 \
@@ -101,7 +113,7 @@ wait_for "openshift-gitops-server" 600 \
     -n openshift-gitops --timeout=10s
 ok "ArgoCD (openshift-gitops-server) ready"
 
-log "Step e: Namespaces on both contexts"
+log "Step f: Namespaces on both contexts"
 for ctx in "${ONPREM}" "${CLOUD}"; do
   for ns in "${NAMESPACES[@]}"; do
     oc --context "${ctx}" create namespace "${ns}" \
@@ -110,7 +122,7 @@ for ctx in "${ONPREM}" "${CLOUD}"; do
   done
 done
 
-log "Step f: Quay.io pull secret on both contexts"
+log "Step g: Quay.io pull secret on both contexts"
 for ctx in "${ONPREM}" "${CLOUD}"; do
   for ns in "${NAMESPACES[@]}"; do
     oc --context "${ctx}" create secret docker-registry quay-pull-secret \
@@ -125,7 +137,7 @@ for ctx in "${ONPREM}" "${CLOUD}"; do
 done
 
 # ── Step g: cert-manager ClusterIssuer ────────────────────────────────────
-log "Step g: cert-manager ClusterIssuer on both contexts"
+log "Step h: cert-manager ClusterIssuer on both contexts"
 for ctx in "${ONPREM}" "${CLOUD}"; do
   oc --context "${ctx}" apply -f "${REPO_ROOT}/infra/cert-manager/cluster-issuer.yaml"
   ok "${ctx}/ClusterIssuer demo-issuer"
