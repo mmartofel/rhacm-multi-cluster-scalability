@@ -166,44 +166,9 @@ if [[ -z "$PG_POD" ]]; then
 fi
 ok "Found PostgreSQL pod: $PG_POD"
 
-oc exec -n banking-infra --context onprem "$PG_POD" -- psql -U postgres postgres <<'SQL'
-CREATE TABLE IF NOT EXISTS accounts (
-  account_id   VARCHAR(20)    PRIMARY KEY,
-  balance      NUMERIC(15,2)  NOT NULL DEFAULT 1000000.00,
-  last_updated TIMESTAMPTZ    DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS transactions (
-  transaction_id  UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id      VARCHAR(20)    NOT NULL,
-  type            VARCHAR(6)     NOT NULL,
-  amount          NUMERIC(15,2)  NOT NULL,
-  balance_after   NUMERIC(15,2),
-  processed_at    TIMESTAMPTZ    DEFAULT now(),
-  source_cluster  VARCHAR(10)    NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS ledger_entries (
-  id              BIGSERIAL      PRIMARY KEY,
-  account_id      VARCHAR(20)    NOT NULL,
-  running_balance NUMERIC(15,2)  NOT NULL,
-  as_of           TIMESTAMPTZ    DEFAULT now(),
-  source_cluster  VARCHAR(10)
-);
-
--- Hibernate 6 sequence (Panache SequenceStyleGenerator, allocationSize=50)
--- Must be lowercase/unquoted: nextval('ledger_entries_SEQ') folds to ledger_entries_seq
-CREATE SEQUENCE IF NOT EXISTS ledger_entries_seq START 1 INCREMENT BY 50;
-
--- Seed 100 test accounts (idempotent)
-INSERT INTO accounts (account_id, balance)
-SELECT 'ACC' || LPAD(i::text, 5, '0'), 1000000.00
-FROM generate_series(1, 100) AS i
-ON CONFLICT (account_id) DO NOTHING;
-
-SELECT 'Schema OK: accounts=' || (SELECT COUNT(*) FROM accounts)::text rows;
-SQL
-ok "PostgreSQL schema initialised (100 accounts seeded)"
+oc exec -n banking-infra --context onprem "$PG_POD" -i -- \
+  psql -U postgres postgres < "$REPO_ROOT/scripts/schema.sql"
+ok "PostgreSQL schema initialised (100 accounts seeded, fresh start)"
 
 # ─── Propagate DB credentials ─────────────────────────────────────────────────
 log "Step 5 — Propagating PostgreSQL credentials to banking-demo namespace"
