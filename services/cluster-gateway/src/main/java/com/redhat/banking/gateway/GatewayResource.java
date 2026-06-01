@@ -1,6 +1,7 @@
 package com.redhat.banking.gateway;
 
 import io.quarkus.scheduler.Scheduled;
+import io.smallrye.common.annotation.Blocking;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -79,6 +80,7 @@ public class GatewayResource {
 
     @PUT
     @Path("/generator/tps/{rate}")
+    @Blocking
     public Response setGeneratorTps(@PathParam("rate") int rate) {
         try {
             HttpClient client = HttpClient.newHttpClient();
