@@ -4,3 +4,4 @@ quay.sh
 .claude/
 node_modules/
 dist/
+**/target/
