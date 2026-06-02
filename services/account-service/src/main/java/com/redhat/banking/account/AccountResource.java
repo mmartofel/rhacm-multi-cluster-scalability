@@ -1,16 +1,23 @@
 package com.redhat.banking.account;
 
+import io.agroal.api.AgroalDataSource;
+import io.quarkus.agroal.DataSource;
 import io.quarkus.cache.CacheInvalidate;
 import io.quarkus.cache.CacheKey;
 import io.quarkus.cache.CacheResult;
 import io.quarkus.logging.Log;
+import io.smallrye.common.annotation.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Map;
 
 @Path("/api/accounts")
@@ -19,19 +26,33 @@ import java.util.Map;
 @ApplicationScoped
 public class AccountResource {
 
+    @Inject
+    @DataSource("read")
+    AgroalDataSource readDataSource;
+
     @GET
     @Path("/{accountId}/balance")
     @CacheResult(cacheName = "balance")
+    @Blocking
     public Response getBalance(@PathParam("accountId") String accountId) {
-        Account account = Account.findById(accountId);
-        if (account == null) {
-            return Response.status(Response.Status.NOT_FOUND).build();
+        try (Connection conn = readDataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT balance, version FROM accounts WHERE account_id = ?")) {
+            ps.setString(1, accountId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Response.status(Response.Status.NOT_FOUND).build();
+                }
+                return Response.ok(Map.of(
+                        "accountId", accountId,
+                        "balance",   rs.getBigDecimal(1),
+                        "version",   rs.getLong(2)
+                )).build();
+            }
+        } catch (Exception e) {
+            Log.errorf("Read datasource error for account %s: %s", accountId, e.getMessage());
+            return Response.serverError().build();
         }
-        return Response.ok(Map.of(
-                "accountId", accountId,
-                "balance", account.balance,
-                "version", account.version
-        )).build();
     }
 
     @POST
@@ -68,23 +89,21 @@ public class AccountResource {
                 return Response.status(Response.Status.NOT_FOUND)
                         .entity(Map.of("success", false, "reason", "account not found")).build();
             }
-            // If a version was supplied and it no longer matches, it's a conflict
-            // (another writer incremented the version between our read and this write)
             if (versionParam != null && check.version != versionParam.longValue()) {
                 return Response.ok(Map.of(
                         "accountId", accountId,
                         "newBalance", check.balance,
-                        "version", check.version,
-                        "success", false,
-                        "reason", "version conflict"
+                        "version",   check.version,
+                        "success",   false,
+                        "reason",    "version conflict"
                 )).build();
             }
             return Response.ok(Map.of(
                     "accountId", accountId,
                     "newBalance", check.balance,
-                    "version", check.version,
-                    "success", false,
-                    "reason", "insufficient funds"
+                    "version",   check.version,
+                    "success",   false,
+                    "reason",    "insufficient funds"
             )).build();
         }
 
@@ -92,9 +111,9 @@ public class AccountResource {
         return Response.ok(Map.of(
                 "accountId", accountId,
                 "newBalance", refreshed.balance,
-                "version", refreshed.version,
-                "success", true,
-                "reason", ""
+                "version",   refreshed.version,
+                "success",   true,
+                "reason",    ""
         )).build();
     }
 }

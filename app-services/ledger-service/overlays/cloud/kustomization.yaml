@@ -19,6 +19,11 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/3/value
       value: "jdbc:postgresql://postgresql-primary.banking-infra.svc.cluster.local:5432/postgres"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: DATASOURCE_READ_URL
+        value: "jdbc:postgresql://postgres-ha.banking-infra.svc.cluster.local:5432/postgres"
   target:
     kind: Deployment
     name: ledger-service
