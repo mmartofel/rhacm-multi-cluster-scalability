@@ -12,4 +12,5 @@ public class ClusterMetrics {
     public double generatorTps;     // from transaction-generator (onprem only)
     public int    processorReplicas = -1;   // readyReplicas of transaction-processor (-1 = unknown)
     public int    accountReplicas   = -1;   // readyReplicas of account-service (-1 = unknown)
+    public long   rejectedTotal     = 0;    // cumulative rejected transactions since processor start
 }

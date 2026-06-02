@@ -2,6 +2,7 @@ package com.redhat.banking.processor;
 
 import com.redhat.banking.TransactionCommitted;
 import com.redhat.banking.TransactionEvent;
+import com.redhat.banking.TransactionFailed;
 import com.redhat.banking.TransactionType;
 import io.quarkus.logging.Log;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -26,6 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -40,6 +42,10 @@ public class TransactionProcessor {
     Emitter<TransactionCommitted> committedEmitter;
 
     @Inject
+    @Channel("transactions-dlq-out")
+    Emitter<TransactionFailed> dlqEmitter;
+
+    @Inject
     EntityManager em;
 
     private final String sourceCluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
@@ -47,12 +53,25 @@ public class TransactionProcessor {
     private final Set<Integer> ownedPartitions = parseOwnedPartitions(
             System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5"));
 
-    // Per-account version cache — avoids a round-trip GET before every apply
     private final ConcurrentHashMap<String, Long> accountVersionCache = new ConcurrentHashMap<>();
+
+    // Rejected transaction counters — reset only on pod restart
+    private final AtomicLong rejectedCount = new AtomicLong(0);
+    private final ConcurrentHashMap<String, AtomicLong> rejectedByReason = new ConcurrentHashMap<>();
 
     private static Set<Integer> parseOwnedPartitions(String spec) {
         return Arrays.stream(spec.split(","))
                 .map(String::trim).map(Integer::parseInt).collect(Collectors.toSet());
+    }
+
+    public long getRejectedCount() {
+        return rejectedCount.get();
+    }
+
+    public Map<String, Long> getRejectedByReason() {
+        Map<String, Long> snapshot = new HashMap<>();
+        rejectedByReason.forEach((k, v) -> snapshot.put(k, v.get()));
+        return snapshot;
     }
 
     @Incoming("transactions-in")
@@ -69,8 +88,7 @@ public class TransactionProcessor {
 
         TransactionEvent event = message.getPayload();
 
-        // Pre-check: skip if already committed — guards against Kafka redelivery
-        // after a crash between the DB write and the offset commit.
+        // Pre-check: skip if already committed (Kafka redelivery after crash)
         boolean alreadyProcessed = QuarkusTransaction.requiringNew().call(() -> {
             Number count = (Number) em.createNativeQuery(
                     "SELECT COUNT(*) FROM transactions WHERE transaction_id = ?1")
@@ -89,26 +107,26 @@ public class TransactionProcessor {
 
         ApplyResponse response = applyWithVersion(event.getAccountId(), delta);
         if (response == null) {
+            sendToDlq(event, "service error");
             return message.ack();
         }
 
         if (!response.success) {
             if ("version conflict".equals(response.reason)) {
-                // Conflict response carries the current DB version — retry once with it
                 accountVersionCache.put(event.getAccountId(), response.version);
                 response = applyWithVersion(event.getAccountId(), delta);
                 if (response == null || !response.success) {
-                    Log.warnf("Transaction %s failed after version conflict retry: %s",
-                            event.getTransactionId(), response != null ? response.reason : "error");
+                    sendToDlq(event, "version conflict");
+                    Log.warnf("Transaction %s sent to DLQ after version conflict retry", event.getTransactionId());
                     return message.ack();
                 }
             } else {
-                Log.warnf("Transaction %s rejected: %s", event.getTransactionId(), response.reason);
+                sendToDlq(event, response.reason);
+                Log.warnf("Transaction %s sent to DLQ: %s", event.getTransactionId(), response.reason);
                 return message.ack();
             }
         }
 
-        // Cache the post-write version for the next transaction on this account
         accountVersionCache.put(event.getAccountId(), response.version);
 
         final ApplyResponse finalResponse = response;
@@ -143,6 +161,25 @@ public class TransactionProcessor {
         }
 
         return message.ack();
+    }
+
+    private void sendToDlq(TransactionEvent event, String reason) {
+        rejectedCount.incrementAndGet();
+        rejectedByReason.computeIfAbsent(reason, k -> new AtomicLong()).incrementAndGet();
+        try {
+            TransactionFailed failed = TransactionFailed.newBuilder()
+                    .setTransactionId(event.getTransactionId())
+                    .setAccountId(event.getAccountId())
+                    .setType(event.getType().name())
+                    .setAmount(event.getAmount())
+                    .setFailureReason(reason)
+                    .setFailedAt(Instant.now())
+                    .setSourceCluster(sourceCluster)
+                    .build();
+            dlqEmitter.send(failed);
+        } catch (Exception e) {
+            Log.errorf("Failed to emit to DLQ for transaction %s: %s", event.getTransactionId(), e.getMessage());
+        }
     }
 
     private ApplyResponse applyWithVersion(String accountId, double delta) {

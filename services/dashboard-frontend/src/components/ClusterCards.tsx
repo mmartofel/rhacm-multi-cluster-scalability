@@ -1,5 +1,6 @@
 import React from 'react';
 import { MetricsPayload, ClusterMetrics, ONPREM_CAPACITY_TPS } from '../types/metrics';
+import { AWS_COLOR, GCP_COLOR } from '../colors';
 
 interface Props { payload: MetricsPayload | null; }
 
@@ -10,11 +11,11 @@ function fmt(n: number, decimals = 0) {
 function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
   const isOnprem = m.cluster === 'onprem';
   const label    = isOnprem ? 'AWS (on-prem)' : 'GCP (cloud burst)';
-  const accent   = isOnprem ? '#06c' : '#4cb140';
+  const accent   = isOnprem ? AWS_COLOR : GCP_COLOR;
   const healthColor = m.healthy ? '#92d400' : '#c9190b';
 
   const roleBadge = isOnprem
-    ? { text: 'Primary', color: '#06c' }
+    ? { text: 'Primary', color: AWS_COLOR }
     : isBurst
       ? { text: 'Burst Active', color: '#f4c145' }
       : { text: 'Standby', color: '#6a6e73' };
@@ -23,6 +24,7 @@ function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
   const tpm          = committedTps * 60;
   const ledger       = m.totalLedgerEntries ?? 0;
   const sinceStat    = m.processedSinceStart ?? 0;
+  const rejected     = m.rejectedTotal ?? 0;
 
   return (
     <div style={{
@@ -80,7 +82,18 @@ function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
         </div>
       </div>
 
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 11, color: '#6a6e73' }}>Rejected (DLQ)</div>
+        <span style={{
+          fontSize: 12, fontWeight: 700,
+          color: rejected > 0 ? '#c9190b' : '#6a6e73',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {fmt(rejected)}
+        </span>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <span style={{ fontSize: 11, color: '#6a6e73' }}>Traffic weight</span>
           <span style={{ fontSize: 11, color: accent, fontWeight: 600 }}>{m.trafficWeight}%</span>

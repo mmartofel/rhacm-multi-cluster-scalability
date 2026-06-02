@@ -2,17 +2,9 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Chart, ChartLine, ChartAxis, ChartGroup, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { ThroughputPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
+import { AWS_COLOR, GCP_COLOR, GEN_COLOR, DARK_AXIS } from '../colors';
 
 interface Props { history: ThroughputPoint[]; }
-
-const GEN_COLOR  = '#f4c145';
-const AWS_COLOR  = '#06c';
-const GCP_COLOR  = '#4cb140';
-const DARK_AXIS  = {
-  axis: { stroke: '#3c3f42' },
-  tickLabels: { fill: '#6a6e73', fontSize: 10 },
-  grid: { stroke: '#2a2d32', strokeDasharray: '2,4' },
-};
 
 export default function ThroughputChart({ history }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);

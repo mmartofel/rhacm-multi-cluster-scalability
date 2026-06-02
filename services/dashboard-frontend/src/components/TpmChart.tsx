@@ -2,17 +2,11 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Chart, ChartArea, ChartAxis, ChartGroup, ChartLine, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { TpmPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
+import { AWS_COLOR, AWS_COLOR_ALPHA, GCP_COLOR, GCP_COLOR_ALPHA, DARK_AXIS } from '../colors';
 
 interface Props { history: TpmPoint[]; }
 
-const AWS_COLOR = '#06c';
-const GCP_COLOR = '#4cb140';
 const CAPACITY_TPM = ONPREM_CAPACITY_TPS * 60;
-const DARK_AXIS = {
-  axis: { stroke: '#3c3f42' },
-  tickLabels: { fill: '#6a6e73', fontSize: 10 },
-  grid: { stroke: '#2a2d32', strokeDasharray: '2,4' },
-};
 
 export default function TpmChart({ history }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,11 +58,11 @@ export default function TpmChart({ history }: Props) {
             <ChartGroup>
               <ChartArea
                 data={history.map(p => ({ x: p.ts, y: p.onprem, name: 'AWS' }))}
-                style={{ data: { fill: 'rgba(0,102,204,0.2)', stroke: AWS_COLOR, strokeWidth: 2 } }}
+                style={{ data: { fill: AWS_COLOR_ALPHA, stroke: AWS_COLOR, strokeWidth: 2 } }}
               />
               <ChartArea
                 data={history.map(p => ({ x: p.ts, y: p.cloud, name: 'GCP' }))}
-                style={{ data: { fill: 'rgba(76,177,64,0.2)', stroke: GCP_COLOR, strokeWidth: 2 } }}
+                style={{ data: { fill: GCP_COLOR_ALPHA, stroke: GCP_COLOR, strokeWidth: 2 } }}
               />
             </ChartGroup>
             <ChartLine

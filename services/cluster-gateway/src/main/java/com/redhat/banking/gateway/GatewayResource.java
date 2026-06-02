@@ -96,6 +96,24 @@ public class GatewayResource {
     }
 
     @GET
+    @Path("/processor/stats")
+    @Blocking
+    public Response processorStats() {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("http://transaction-processor.banking-demo.svc.cluster.local:8080/api/processor/stats"))
+                    .timeout(Duration.ofMillis(400))
+                    .GET()
+                    .build();
+            String body = client.send(req, HttpResponse.BodyHandlers.ofString()).body();
+            return Response.ok(body).type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            return Response.ok("{\"rejectedTotal\":0,\"rejectedByReason\":{}}").type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    @GET
     @Path("/health")
     public Response health() {
         return Response.ok(Map.of(

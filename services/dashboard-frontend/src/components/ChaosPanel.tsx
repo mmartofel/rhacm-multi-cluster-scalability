@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MetricsPayload } from '../types/metrics';
 import { ProcessingMode } from '../App';
+import { AWS_COLOR, GCP_COLOR } from '../colors';
 
 interface Props {
   payload: MetricsPayload | null;
@@ -31,8 +32,8 @@ const MODES: ModeAction[] = [
     label: 'Route 100% → AWS',
     description: 'all traffic routed to onprem cluster',
     weight: 100,
-    activeColor: '#0066cc22',
-    borderColor: '#06c',
+    activeColor: `${AWS_COLOR}22`,
+    borderColor: AWS_COLOR,
   },
   {
     mode: 'split',
@@ -47,8 +48,8 @@ const MODES: ModeAction[] = [
     label: 'Route 100% → GCP',
     description: 'all traffic routed to cloud cluster',
     weight: 0,
-    activeColor: '#f4c14522',
-    borderColor: '#f4c145',
+    activeColor: `${GCP_COLOR}22`,
+    borderColor: GCP_COLOR,
   },
 ];
 
@@ -93,9 +94,9 @@ export default function ChaosPanel({ payload, processingMode, onModeChange }: Pr
         <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 6 }}>Current split</div>
         {onpremWeight !== null ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: '#06c',    fontWeight: 700 }}>AWS {onpremWeight}%</span>
+            <span style={{ fontSize: 12, color: AWS_COLOR, fontWeight: 700 }}>AWS {onpremWeight}%</span>
             <span style={{ fontSize: 11, color: '#6a6e73' }}>·</span>
-            <span style={{ fontSize: 12, color: '#4cb140', fontWeight: 700 }}>GCP {cloudWeight ?? 100 - onpremWeight}%</span>
+            <span style={{ fontSize: 12, color: GCP_COLOR, fontWeight: 700 }}>GCP {cloudWeight ?? 100 - onpremWeight}%</span>
           </div>
         ) : (
           <span style={{ fontSize: 12, color: '#6a6e73' }}>waiting for data…</span>

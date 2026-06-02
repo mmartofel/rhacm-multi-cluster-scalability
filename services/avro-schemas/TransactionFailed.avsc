@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "TransactionFailed",
+  "namespace": "com.redhat.banking",
+  "fields": [
+    {"name": "transactionId",  "type": "string"},
+    {"name": "accountId",      "type": "string"},
+    {"name": "type",           "type": "string"},
+    {"name": "amount",         "type": "double"},
+    {"name": "failureReason",  "type": "string"},
+    {"name": "failedAt",       "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "sourceCluster",  "type": "string"}
+  ]
+}

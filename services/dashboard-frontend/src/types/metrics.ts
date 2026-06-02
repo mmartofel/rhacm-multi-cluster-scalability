@@ -12,6 +12,7 @@ export interface ClusterMetrics {
   generatorTps: number;
   processorReplicas: number;
   accountReplicas: number;
+  rejectedTotal: number;
 }
 
 export interface MetricsPayload {

@@ -86,6 +86,14 @@ public class ClusterPoller {
         }
 
         try {
+            String statsJson = httpGet(gatewayUrl + "/api/gateway/processor/stats");
+            JsonNode st = mapper.readTree(statsJson);
+            m.rejectedTotal = st.path("rejectedTotal").asLong(0);
+        } catch (Exception e) {
+            // leave at 0
+        }
+
+        try {
             String ledgerJson = httpGet(ledgerUrl + "/api/ledger/summary");
             JsonNode lg = mapper.readTree(ledgerJson);
             m.totalLedgerEntries = lg.path("totalLedgerEntries").asLong(0);

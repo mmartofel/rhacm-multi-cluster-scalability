@@ -8,13 +8,7 @@ interface Props {
   payload: MetricsPayload | null;
 }
 
-const AWS_COLOR  = '#06c';
-const GCP_COLOR  = '#4cb140';
-const DARK_AXIS  = {
-  axis:       { stroke: '#3c3f42' },
-  tickLabels: { fill: '#6a6e73', fontSize: 10 },
-  grid:       { stroke: '#2a2d32', strokeDasharray: '2,4' },
-};
+import { AWS_COLOR, GCP_COLOR, DARK_AXIS } from '../colors';
 
 const SCALER_CONFIG = {
   processor: {
