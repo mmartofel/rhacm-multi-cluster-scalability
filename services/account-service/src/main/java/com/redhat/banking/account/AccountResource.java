@@ -1,5 +1,7 @@
 package com.redhat.banking.account;
 
+import io.quarkus.cache.CacheInvalidate;
+import io.quarkus.cache.CacheKey;
 import io.quarkus.cache.CacheResult;
 import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -35,7 +37,8 @@ public class AccountResource {
     @POST
     @Path("/{accountId}/apply")
     @Transactional
-    public Response applyDelta(@PathParam("accountId") String accountId, Map<String, Double> body) {
+    @CacheInvalidate(cacheName = "balance")
+    public Response applyDelta(@CacheKey @PathParam("accountId") String accountId, Map<String, Double> body) {
         double delta = body.getOrDefault("delta", 0.0);
 
         // Atomic balance update with overflow/underflow guard
