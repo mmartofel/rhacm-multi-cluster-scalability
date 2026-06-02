@@ -232,3 +232,9 @@ Inject it with `@Inject @DataSource("read") AgroalDataSource readDataSource` and
 The PGO service name for the cloud standby is `postgres-ha` (PgBouncer HA service, recommended entry point). Confirm with `oc get svc -n banking-infra --context cloud | grep postgres` before deploying — use `postgres-replicas` as a fallback if `postgres-ha` is absent. Do NOT use `postgres-primary` on cloud; that name is reserved for the Skupper Listener that tunnels to the onprem primary (`postgresql-primary` is the Skupper service; `postgres-primary` is the PGO local service — they have different names but the CLAUDE.md warning was about credential mismatch, not the hostname itself).
 
 Chaos resilience benefit: routing reads to the local replica means balance lookups and ledger counts survive a Skupper link failure — only write operations (`POST /apply`, ledger entry inserts) circuit-break when the tunnel is severed.
+
+**Avro schemas must be placed in each service's `src/main/avro/` — the shared `services/avro-schemas/` directory is not used by Maven:**
+The avro-maven-plugin in each Quarkus service reads `.avsc` files from `src/main/avro/` inside that service's directory. The Dockerfile copies only `pom.xml` and `src/` into the Docker build stage — the top-level `services/avro-schemas/` directory is never copied and is invisible to Maven. Adding a new schema only to `services/avro-schemas/` causes a `cannot find symbol` compilation failure in Tekton. The correct procedure for any new Avro type used by a service:
+1. Add the `.avsc` file to `services/avro-schemas/` (for Apicurio bootstrap registration)
+2. Copy the same file to `services/<service-name>/src/main/avro/` for every service that imports the generated class
+`TransactionFailed.avsc` must exist in both `services/avro-schemas/` AND `services/transaction-processor/src/main/avro/` — the former for Apicurio, the latter for the Maven build.
