@@ -11,7 +11,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Map;
 
 @Path("/api/accounts")
@@ -30,7 +29,8 @@ public class AccountResource {
         }
         return Response.ok(Map.of(
                 "accountId", accountId,
-                "balance", account.balance
+                "balance", account.balance,
+                "version", account.version
         )).build();
     }
 
@@ -38,17 +38,29 @@ public class AccountResource {
     @Path("/{accountId}/apply")
     @Transactional
     @CacheInvalidate(cacheName = "balance")
-    public Response applyDelta(@CacheKey @PathParam("accountId") String accountId, Map<String, Double> body) {
-        double delta = body.getOrDefault("delta", 0.0);
+    public Response applyDelta(@CacheKey @PathParam("accountId") String accountId, Map<String, Number> body) {
+        double delta = body.getOrDefault("delta", 0).doubleValue();
+        Number versionParam = body.get("version");
 
-        // Atomic balance update with overflow/underflow guard
-        int updated = Account.getEntityManager()
-                .createNativeQuery(
-                        "UPDATE accounts SET balance = balance + :delta, last_updated = now() " +
-                        "WHERE account_id = :id AND (balance + :delta) >= 0")
-                .setParameter("delta", delta)
-                .setParameter("id", accountId)
-                .executeUpdate();
+        int updated;
+        if (versionParam != null) {
+            updated = Account.getEntityManager()
+                    .createNativeQuery(
+                            "UPDATE accounts SET balance = balance + :delta, version = version + 1, last_updated = now() " +
+                            "WHERE account_id = :id AND version = :version AND (balance + :delta) >= 0")
+                    .setParameter("delta", delta)
+                    .setParameter("id", accountId)
+                    .setParameter("version", versionParam.longValue())
+                    .executeUpdate();
+        } else {
+            updated = Account.getEntityManager()
+                    .createNativeQuery(
+                            "UPDATE accounts SET balance = balance + :delta, version = version + 1, last_updated = now() " +
+                            "WHERE account_id = :id AND (balance + :delta) >= 0")
+                    .setParameter("delta", delta)
+                    .setParameter("id", accountId)
+                    .executeUpdate();
+        }
 
         if (updated == 0) {
             Account check = Account.findById(accountId);
@@ -56,9 +68,21 @@ public class AccountResource {
                 return Response.status(Response.Status.NOT_FOUND)
                         .entity(Map.of("success", false, "reason", "account not found")).build();
             }
+            // If a version was supplied and it no longer matches, it's a conflict
+            // (another writer incremented the version between our read and this write)
+            if (versionParam != null && check.version != versionParam.longValue()) {
+                return Response.ok(Map.of(
+                        "accountId", accountId,
+                        "newBalance", check.balance,
+                        "version", check.version,
+                        "success", false,
+                        "reason", "version conflict"
+                )).build();
+            }
             return Response.ok(Map.of(
                     "accountId", accountId,
                     "newBalance", check.balance,
+                    "version", check.version,
                     "success", false,
                     "reason", "insufficient funds"
             )).build();
@@ -68,6 +92,7 @@ public class AccountResource {
         return Response.ok(Map.of(
                 "accountId", accountId,
                 "newBalance", refreshed.balance,
+                "version", refreshed.version,
                 "success", true,
                 "reason", ""
         )).build();

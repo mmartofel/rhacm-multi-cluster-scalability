@@ -17,6 +17,9 @@ public class Account extends PanacheEntityBase {
     @Column(name = "balance", nullable = false, precision = 15, scale = 2)
     public BigDecimal balance;
 
+    @Column(name = "version", nullable = false)
+    public long version;
+
     @Column(name = "last_updated")
     public Instant lastUpdated = Instant.now();
 }

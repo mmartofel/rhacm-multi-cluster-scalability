@@ -12,6 +12,7 @@ DROP SEQUENCE IF EXISTS ledger_entries_seq CASCADE;
 CREATE TABLE accounts (
   account_id   VARCHAR(20)    PRIMARY KEY,
   balance      NUMERIC(15,2)  NOT NULL DEFAULT 1000000.00,
+  version      BIGINT         NOT NULL DEFAULT 0,
   last_updated TIMESTAMPTZ    DEFAULT now()
 );
 

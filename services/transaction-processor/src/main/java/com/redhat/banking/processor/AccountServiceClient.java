@@ -14,5 +14,5 @@ public interface AccountServiceClient {
 
     @POST
     @Path("/{accountId}/apply")
-    ApplyResponse applyDelta(@PathParam("accountId") String accountId, Map<String, Double> body);
+    ApplyResponse applyDelta(@PathParam("accountId") String accountId, Map<String, Number> body);
 }

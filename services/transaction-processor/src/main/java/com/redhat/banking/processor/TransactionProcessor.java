@@ -20,10 +20,12 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -45,6 +47,9 @@ public class TransactionProcessor {
     private final Set<Integer> ownedPartitions = parseOwnedPartitions(
             System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5"));
 
+    // Per-account version cache — avoids a round-trip GET before every apply
+    private final ConcurrentHashMap<String, Long> accountVersionCache = new ConcurrentHashMap<>();
+
     private static Set<Integer> parseOwnedPartitions(String spec) {
         return Arrays.stream(spec.split(","))
                 .map(String::trim).map(Integer::parseInt).collect(Collectors.toSet());
@@ -64,22 +69,47 @@ public class TransactionProcessor {
 
         TransactionEvent event = message.getPayload();
 
+        // Pre-check: skip if already committed — guards against Kafka redelivery
+        // after a crash between the DB write and the offset commit.
+        boolean alreadyProcessed = QuarkusTransaction.requiringNew().call(() -> {
+            Number count = (Number) em.createNativeQuery(
+                    "SELECT COUNT(*) FROM transactions WHERE transaction_id = ?1")
+                    .setParameter(1, UUID.fromString(event.getTransactionId()))
+                    .getSingleResult();
+            return count.longValue() > 0;
+        });
+        if (alreadyProcessed) {
+            Log.debugf("Transaction %s already committed (redelivery skip)", event.getTransactionId());
+            return message.ack();
+        }
+
         double delta = event.getType() == TransactionType.DEBIT
                 ? -event.getAmount()
                 : event.getAmount();
 
-        ApplyResponse response;
-        try {
-            response = accountClient.applyDelta(event.getAccountId(), Map.of("delta", delta));
-        } catch (Exception e) {
-            Log.errorf("Failed to apply balance for account %s: %s", event.getAccountId(), e.getMessage());
+        ApplyResponse response = applyWithVersion(event.getAccountId(), delta);
+        if (response == null) {
             return message.ack();
         }
 
         if (!response.success) {
-            Log.warnf("Transaction %s rejected: %s", event.getTransactionId(), response.reason);
-            return message.ack();
+            if ("version conflict".equals(response.reason)) {
+                // Conflict response carries the current DB version — retry once with it
+                accountVersionCache.put(event.getAccountId(), response.version);
+                response = applyWithVersion(event.getAccountId(), delta);
+                if (response == null || !response.success) {
+                    Log.warnf("Transaction %s failed after version conflict retry: %s",
+                            event.getTransactionId(), response != null ? response.reason : "error");
+                    return message.ack();
+                }
+            } else {
+                Log.warnf("Transaction %s rejected: %s", event.getTransactionId(), response.reason);
+                return message.ack();
+            }
         }
+
+        // Cache the post-write version for the next transaction on this account
+        accountVersionCache.put(event.getAccountId(), response.version);
 
         final ApplyResponse finalResponse = response;
         boolean shouldEmit = QuarkusTransaction.requiringNew().call(() -> {
@@ -113,5 +143,20 @@ public class TransactionProcessor {
         }
 
         return message.ack();
+    }
+
+    private ApplyResponse applyWithVersion(String accountId, double delta) {
+        Long cachedVersion = accountVersionCache.get(accountId);
+        Map<String, Number> body = new HashMap<>();
+        body.put("delta", delta);
+        if (cachedVersion != null) {
+            body.put("version", cachedVersion);
+        }
+        try {
+            return accountClient.applyDelta(accountId, body);
+        } catch (Exception e) {
+            Log.errorf("Failed to apply balance for account %s: %s", accountId, e.getMessage());
+            return null;
+        }
     }
 }
