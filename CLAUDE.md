@@ -214,3 +214,21 @@ All Quarkus service Dockerfiles use multi-stage builds that copy only `pom.xml` 
 
 **Pod restart ≠ image rebuild — only `bootstrap-phase2.sh` (Tekton) rebuilds images:**
 In OpenShift, restarting a pod (`oc rollout restart` or deleting a pod) causes the node to re-pull the existing image tag from the registry — it does NOT trigger a new build. Source code changes only take effect after a new Docker image is built and pushed. Run `bootstrap-phase2.sh` to trigger Tekton PipelineRuns for all 7 services. After builds complete, Argo CD detects the new image digest and automatically rolls out updated pods. If you restart a pod expecting to see code changes and nothing changes, the image has not been rebuilt.
+
+**Cloud-local PostgreSQL replica for read-only queries — named Agroal datasource pattern:**
+The cloud PGO streaming standby (`postgres-ha.banking-infra.svc.cluster.local:5432`) replicates the full onprem database including `pg_authid`, so the same `DATASOURCE_USER`/`DATASOURCE_PASSWORD` credentials (onprem PGO password) work directly on the cloud replica without crossing the Skupper tunnel. Verify the replica has data before relying on it: `oc exec -n banking-infra --context cloud <pg-pod> -- psql -U postgres postgres -c 'SELECT count(*) FROM accounts;'` should return 100.
+
+To split reads from writes in Quarkus without a second Hibernate ORM persistence unit, add a named Agroal datasource in `application.properties`:
+```
+quarkus.datasource."read".db-kind=postgresql
+quarkus.datasource."read".jdbc.url=${DATASOURCE_READ_URL:${DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}}
+quarkus.datasource."read".username=${DATASOURCE_USER:postgres}
+quarkus.datasource."read".password=${DATASOURCE_PASSWORD:postgres}
+```
+Inject it with `@Inject @DataSource("read") AgroalDataSource readDataSource` and use raw JDBC (`Connection`/`PreparedStatement`/`ResultSet`) for SELECT queries. Panache static methods (`Entity.findById`, `Entity.count`) only work with the default datasource — replace them with raw JDBC on the read path. Add `@Blocking` to any JAX-RS method that opens a JDBC connection; without it RESTEasy Reactive dispatches on the event loop and JDBC stalls it. `DATASOURCE_READ_URL` defaults to `${DATASOURCE_URL}` so onprem services and local dev use a single datasource with zero code impact.
+
+`@Scheduled` methods that previously used `@Transactional` + Panache for a count query can drop both annotations when replaced with raw JDBC — plain JDBC does not need a JTA transaction context.
+
+The PGO service name for the cloud standby is `postgres-ha` (PgBouncer HA service, recommended entry point). Confirm with `oc get svc -n banking-infra --context cloud | grep postgres` before deploying — use `postgres-replicas` as a fallback if `postgres-ha` is absent. Do NOT use `postgres-primary` on cloud; that name is reserved for the Skupper Listener that tunnels to the onprem primary (`postgresql-primary` is the Skupper service; `postgres-primary` is the PGO local service — they have different names but the CLAUDE.md warning was about credential mismatch, not the hostname itself).
+
+Chaos resilience benefit: routing reads to the local replica means balance lookups and ledger counts survive a Skupper link failure — only write operations (`POST /apply`, ledger entry inserts) circuit-break when the tunnel is severed.
