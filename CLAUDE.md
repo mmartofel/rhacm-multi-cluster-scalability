@@ -18,7 +18,7 @@ Cross-cluster connectivity is provided by **Red Hat Service Interconnect (RHSI)*
 | Service | Role | Notes |
 |---|---|---|
 | `transaction-generator` | Emits synthetic DEBIT/CREDIT `TransactionEvent`s to Kafka at configurable TPS | JVM mode; ConfigMap-driven TPS |
-| `transaction-processor` | Consumes Kafka, validates balance, writes to PostgreSQL, emits `TransactionCommitted` | Native mode + KEDA; GCP instance writes to AWS PostgreSQL via RHSI |
+| `transaction-processor` | Consumes Kafka, validates balance, writes to PostgreSQL, emits `TransactionCommitted`; failed transactions emitted to DLQ | JVM mode + KEDA; GCP instance writes to AWS PostgreSQL via RHSI; `OWNED_PARTITIONS` env var restricts consumption to cluster-specific partitions (onprem: 0,1,2 · cloud: 3,4,5) |
 | `account-service` | Balance reads via Quarkus `@CacheResult` in-process cache; reads PostgreSQL directly | AWS: HPA CPU 60%; GCP: 0–5 replicas |
 | `ledger-service` | Authoritative running balance; serves REST to dashboard-backend | GCP instance reads from onprem PostgreSQL via RHSI (`postgresql-primary`) |
 | `cluster-gateway` | Traffic weight control; aggregated `/health` and `/metrics` | Manages Istio VirtualService weights |
@@ -48,13 +48,14 @@ Cross-cluster connectivity is provided by **Red Hat Service Interconnect (RHSI)*
 
 ### Critical Data Flow
 
-1. `transaction-generator` → Kafka AWS (`transactions-raw`, Avro, `acks=all`, `min.insync.replicas=2`)
-2. MirrorMaker 2 replicates `transactions-raw` to Kafka GCP via RHSI
-3. `transaction-processor` (AWS) consumes locally; GCP processor consumes from GCP Kafka replica
-4. Both processors validate balance via `account-service` (Quarkus `@CacheResult` → PostgreSQL)
+1. `transaction-generator` (onprem) → Kafka AWS partitions 0–2; `transaction-generator` (cloud) → Kafka GCP partitions 3–5
+2. MirrorMaker 2 replicates `transactions-raw` onprem → cloud (DR copy; cloud processor ignores MM2-replicated partitions 0–2)
+3. `transaction-processor` (onprem) consumes partitions 0–2 from onprem Kafka; cloud processor consumes partitions 3–5 from cloud Kafka — **no message is processed by both clusters**
+4. Both processors validate balance via `account-service` (Quarkus `@CacheResult` + `@CacheInvalidate` → PostgreSQL, optimistic version locking)
 5. **GCP processor writes committed transactions to AWS PostgreSQL primary via RHSI** (tunnelled JDBC)
-6. `ledger-service` consumes `TransactionCommitted` and updates running balance
-7. `dashboard-backend` polls both ledger services every 500ms → WebSocket push to frontend
+6. Failed transactions (insufficient funds, version conflict, service error) → `transactions-dlq` (Avro `TransactionFailed`); in-memory counters surfaced via `/api/processor/stats`
+7. `ledger-service` consumes `TransactionCommitted` and updates running balance
+8. `dashboard-backend` polls both ledger services + processor stats every 1 s → WebSocket push to frontend
 
 ### Chaos Scenario: RHSI Link Partition
 
@@ -198,3 +199,18 @@ The `accounts` table carries a `version BIGINT NOT NULL DEFAULT 0` column. Every
 The `AccountServiceClient` body type must be `Map<String, Number>` (not `Map<String, Double>`) because the map carries both a `Double` delta and a `Long` version. Using `Map<String, Double>` forces a lossy cast on the version. Build the map with `new HashMap<>()` and `put` both values rather than `Map.of()` when the version entry is conditional — `Map.of` with mixed `Double`/`Long` values infers an intersection type that does not satisfy `Map<String, Number>` without explicit casts.
 
 `ON CONFLICT DO NOTHING` on the `transactions` INSERT only prevents a duplicate row — it does NOT prevent `account-service.apply()` being called again on Kafka redelivery, which would corrupt the balance. The correct guard is a transaction-id pre-check BEFORE calling account-service: query `SELECT COUNT(*) FROM transactions WHERE transaction_id = ?1` inside `QuarkusTransaction.requiringNew()` and fast-ACK if the row already exists. The version cache (`ConcurrentHashMap<String, Long>`) in the processor stores the last known version per accountId, eliminating the extra GET call on every apply; it is populated from the `version` field in the `ApplyResponse`.
+
+**DLQ Avro schema — use `string` for shared enum fields to avoid cross-schema type conflicts:**
+When a new Avro schema (e.g., `TransactionFailed`) needs a field whose type is an enum defined in another schema (`TransactionType` in `TransactionEvent.avsc`), do NOT redefine the enum inline (avro-maven-plugin duplicate type error) and do NOT reference it by fully-qualified name (fragile cross-schema resolution at runtime). Use `"type": "string"` for the field and call `.name()` on the enum value at the call site (e.g., `event.getType().name()`). Simpler, avoids all cross-schema dependency, and the string value is human-readable in the DLQ topic.
+
+**`bootstrap-phase2.sh` schema registration loop must include every Avro schema in `services/avro-schemas/`:**
+Step 7 registers schemas explicitly with Apicurio so backward-compatibility enforcement is active before any pod starts. Any new `.avsc` file must be added to the `for schema in TransactionEvent TransactionCommitted TransactionFailed; do` loop. Without it the schema is only registered via `auto-register=true` on first emit — which works but bypasses compatibility checks until the first real message is produced.
+
+**DLQ counter pattern — in-memory `AtomicLong` + `ConcurrentHashMap`, exposed via REST, proxied through cluster-gateway:**
+To surface per-cluster rejection counts on the dashboard without a separate consumer service: track counts in the processor with `AtomicLong rejectedCount` and `ConcurrentHashMap<String, AtomicLong> rejectedByReason`; expose via `GET /api/processor/stats` (`ProcessorStatsResource`). The cluster-gateway proxies this as `GET /api/gateway/processor/stats` using the same `java.net.http.HttpClient` pattern as the existing `scaling/summary` proxy. `ClusterPoller` in dashboard-backend polls the gateway endpoint and adds `rejectedTotal` to `ClusterMetrics`/`MetricsPayload`. This avoids adding a Kafka dependency to dashboard-backend.
+
+**Maven `target/` directories must never be committed — add `**/target/` to `.gitignore`:**
+All Quarkus service Dockerfiles use multi-stage builds that copy only `pom.xml` and `src/`; Maven runs entirely inside the Docker build stage. The local `target/` directory is never read from the repository. Remove any committed `target/` content with `git rm -r --cached services/*/target` and add `**/target/` to `.gitignore`. Committing build artifacts wastes space, pollutes diffs, and gives a false impression that pre-compiled classes are required.
+
+**Pod restart ≠ image rebuild — only `bootstrap-phase2.sh` (Tekton) rebuilds images:**
+In OpenShift, restarting a pod (`oc rollout restart` or deleting a pod) causes the node to re-pull the existing image tag from the registry — it does NOT trigger a new build. Source code changes only take effect after a new Docker image is built and pushed. Run `bootstrap-phase2.sh` to trigger Tekton PipelineRuns for all 7 services. After builds complete, Argo CD detects the new image digest and automatically rolls out updated pods. If you restart a pod expecting to see code changes and nothing changes, the image has not been rebuilt.
