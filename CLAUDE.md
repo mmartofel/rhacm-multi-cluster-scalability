@@ -218,6 +218,9 @@ In OpenShift, restarting a pod (`oc rollout restart` or deleting a pod) causes t
 **Cloud-local PostgreSQL replica for read-only queries — named Agroal datasource pattern:**
 The cloud PGO streaming standby (`postgres-ha.banking-infra.svc.cluster.local:5432`) replicates the full onprem database including `pg_authid`, so the same `DATASOURCE_USER`/`DATASOURCE_PASSWORD` credentials (onprem PGO password) work directly on the cloud replica without crossing the Skupper tunnel. Verify the replica has data before relying on it: `oc exec -n banking-infra --context cloud <pg-pod> -- psql -U postgres postgres -c 'SELECT count(*) FROM accounts;'` should return 100.
 
+**IMPORTANT — standby mode must be enabled before `DATASOURCE_READ_URL` is set in cloud overlays:**
+The cloud `PostgresCluster` CR requires `spec.standby.enabled: true` before the read-replica path works. Without standby mode the cloud PGO is an independent cluster with its own PGO-managed password — different from the onprem password in `postgresql-credentials`. Setting `DATASOURCE_READ_URL=postgres-ha…` while standby is inactive causes `FATAL: password authentication failed` every few seconds, the Quarkus health check for the "read" datasource reports DOWN, and pods never become ready. To guard against this, `application.properties` must always include `quarkus.datasource."read".health.enabled=false` so a failed read replica cannot block pod readiness. Until `spec.standby` is configured and replication has caught up, do not add `DATASOURCE_READ_URL` to the cloud overlay — the fallback to `${DATASOURCE_URL}` (RHSI to onprem primary) keeps the service functional.
+
 To split reads from writes in Quarkus without a second Hibernate ORM persistence unit, add a named Agroal datasource in `application.properties`:
 ```
 quarkus.datasource."read".db-kind=postgresql

@@ -51,7 +51,7 @@ public class AccountResource {
             }
         } catch (Exception e) {
             Log.errorf("Read datasource error for account %s: %s", accountId, e.getMessage());
-            return Response.serverError().build();
+            throw new jakarta.ws.rs.InternalServerErrorException("Balance read unavailable: " + e.getMessage());
         }
     }
 
