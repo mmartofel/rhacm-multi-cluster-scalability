@@ -235,7 +235,7 @@ if [[ -n "$APICURIO_ROUTE" ]]; then
   APICURIO_BASE="https://$APICURIO_ROUTE/apis/registry/v2"
   info "Apicurio route: $APICURIO_ROUTE"
 
-  for schema in TransactionEvent TransactionCommitted; do
+  for schema in TransactionEvent TransactionCommitted TransactionFailed; do
     AVSC="$REPO_ROOT/services/avro-schemas/${schema}.avsc"
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
       -X POST "$APICURIO_BASE/groups/default/artifacts" \
