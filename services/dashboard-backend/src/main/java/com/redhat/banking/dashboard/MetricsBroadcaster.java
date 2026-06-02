@@ -1,19 +1,21 @@
 package com.redhat.banking.dashboard;
 
-import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
-import io.smallrye.mutiny.Multi;
+import io.quarkus.logging.Log;
+import io.quarkus.websockets.next.OpenConnections;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class MetricsBroadcaster {
 
-    private final BroadcastProcessor<String> processor = BroadcastProcessor.create();
+    @Inject
+    OpenConnections connections;
 
     public void publish(String json) {
-        processor.onNext(json);
-    }
-
-    public Multi<String> stream() {
-        return processor;
+        var open = connections.findByPath("/ws/metrics");
+        if (open.iterator().hasNext()) {
+            open.broadcast().sendText(json)
+                    .subscribe().with(ignored -> {}, err -> Log.debugf("WS send skipped: %s", err.getMessage()));
+        }
     }
 }
