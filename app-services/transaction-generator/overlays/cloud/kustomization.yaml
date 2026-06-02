@@ -13,6 +13,9 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/2/value
       value: "cloud"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/3/value
+      value: "3,4,5"
   target:
     kind: Deployment
     name: transaction-generator

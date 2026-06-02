@@ -16,7 +16,6 @@ import org.eclipse.microprofile.reactive.messaging.Metadata;
 import java.time.Instant;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 @ApplicationScoped
@@ -28,6 +27,20 @@ public class TransactionGeneratorService {
 
     @ConfigProperty(name = "TPS_RATE", defaultValue = "0")
     volatile int tpsRate;
+
+    private final int[] ownedPartitions = parseOwnedPartitions(
+            System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5"));
+
+    private static int[] parseOwnedPartitions(String spec) {
+        String[] parts = spec.split(",");
+        int[] result = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) result[i] = Integer.parseInt(parts[i].trim());
+        return result;
+    }
+
+    private int computePartition(String key) {
+        return ownedPartitions[Math.abs(key.hashCode()) % ownedPartitions.length];
+    }
 
     private final Random random = new Random();
     private final AtomicLong generated = new AtomicLong(0);
@@ -62,6 +75,7 @@ public class TransactionGeneratorService {
             emitter.send(Message.of(event, Metadata.of(
                     OutgoingKafkaRecordMetadata.<String>builder()
                             .withKey(accountId)
+                            .withPartition(computePartition(accountId))
                             .build())));
             generated.incrementAndGet();
         }

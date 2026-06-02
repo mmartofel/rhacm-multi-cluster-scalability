@@ -31,6 +31,8 @@ spec:
           value: http://apicurio-registry.banking-infra.svc.cluster.local:8080
         - name: SOURCE_CLUSTER
           value: onprem
+        - name: OWNED_PARTITIONS
+          value: "0,1,2,3,4,5"
         resources:
           requests:
             cpu: 100m

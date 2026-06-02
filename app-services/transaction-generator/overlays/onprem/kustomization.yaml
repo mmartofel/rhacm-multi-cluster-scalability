@@ -7,6 +7,9 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/2/value
       value: "onprem"
+    - op: replace
+      path: /spec/template/spec/containers/0/env/3/value
+      value: "0,1,2"
   target:
     kind: Deployment
     name: transaction-generator
