@@ -3,12 +3,14 @@ package com.redhat.banking.processor;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Path("/api/processor/stats")
 @Produces(MediaType.APPLICATION_JSON)
@@ -25,5 +27,15 @@ public class ProcessorStatsResource {
                 "rejectedTotal",    processor.getRejectedCount(),
                 "rejectedByReason", processor.getRejectedByReason()
         );
+    }
+
+    @PUT
+    @Path("/partitions")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response setPartitions(Map<String, List<Integer>> body) {
+        List<Integer> list = body.getOrDefault("partitions", List.of());
+        Set<Integer> partitions = list.stream().collect(Collectors.toSet());
+        processor.setOwnedPartitions(partitions);
+        return Response.ok(Map.of("ownedPartitions", list)).build();
     }
 }

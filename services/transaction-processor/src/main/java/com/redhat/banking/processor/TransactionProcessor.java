@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
@@ -50,8 +51,8 @@ public class TransactionProcessor {
 
     private final String sourceCluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
 
-    private final Set<Integer> ownedPartitions = parseOwnedPartitions(
-            System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5"));
+    private final AtomicReference<Set<Integer>> ownedPartitions = new AtomicReference<>(
+            parseOwnedPartitions(System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5")));
 
     private final ConcurrentHashMap<String, Long> accountVersionCache = new ConcurrentHashMap<>();
 
@@ -62,6 +63,10 @@ public class TransactionProcessor {
     private static Set<Integer> parseOwnedPartitions(String spec) {
         return Arrays.stream(spec.split(","))
                 .map(String::trim).map(Integer::parseInt).collect(Collectors.toSet());
+    }
+
+    public void setOwnedPartitions(Set<Integer> partitions) {
+        ownedPartitions.set(partitions);
     }
 
     public long getRejectedCount() {
@@ -82,7 +87,7 @@ public class TransactionProcessor {
                 .map(IncomingKafkaRecordMetadata::getPartition)
                 .orElse(-1);
 
-        if (!ownedPartitions.contains(partition)) {
+        if (!ownedPartitions.get().contains(partition)) {
             return message.ack();
         }
 

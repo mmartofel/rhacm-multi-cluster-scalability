@@ -28,7 +28,7 @@ public class TransactionGeneratorService {
     @ConfigProperty(name = "TPS_RATE", defaultValue = "0")
     volatile int tpsRate;
 
-    private final int[] ownedPartitions = parseOwnedPartitions(
+    private volatile int[] ownedPartitions = parseOwnedPartitions(
             System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5"));
 
     private static int[] parseOwnedPartitions(String spec) {
@@ -38,8 +38,14 @@ public class TransactionGeneratorService {
         return result;
     }
 
+    public void setOwnedPartitions(int[] partitions) {
+        ownedPartitions = partitions;
+    }
+
     private int computePartition(String key) {
-        return ownedPartitions[Math.abs(key.hashCode()) % ownedPartitions.length];
+        int[] current = ownedPartitions;
+        if (current.length == 0) return -1;
+        return current[Math.abs(key.hashCode()) % current.length];
     }
 
     private final Random random = new Random();
@@ -72,10 +78,12 @@ public class TransactionGeneratorService {
                     .setTimestamp(Instant.now())
                     .build();
 
+            int partition = computePartition(accountId);
+            if (partition < 0) continue;
             emitter.send(Message.of(event, Metadata.of(
                     OutgoingKafkaRecordMetadata.<String>builder()
                             .withKey(accountId)
-                            .withPartition(computePartition(accountId))
+                            .withPartition(partition)
                             .build())));
             generated.incrementAndGet();
         }
