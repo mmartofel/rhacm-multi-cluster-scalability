@@ -10,18 +10,15 @@ import jakarta.inject.Inject;
 public class DashboardSocket {
 
     @Inject
-    WebSocketConnection connection;
-
-    @Inject
     MetricsBroadcaster broadcaster;
 
     @OnOpen
-    public void onOpen() {
+    public void onOpen(WebSocketConnection connection) {
         broadcaster.register(connection);
     }
 
     @OnClose
-    public void onClose() {
+    public void onClose(WebSocketConnection connection) {
         broadcaster.unregister(connection);
     }
 }
