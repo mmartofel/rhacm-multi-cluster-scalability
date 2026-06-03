@@ -69,6 +69,10 @@ public class TransactionProcessor {
         ownedPartitions.set(partitions);
     }
 
+    public Set<Integer> getOwnedPartitions() {
+        return ownedPartitions.get();
+    }
+
     public long getRejectedCount() {
         return rejectedCount.get();
     }

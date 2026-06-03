@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.redhat.banking.processor.KafkaPartitionStats.PartitionLag;
+
 @Path("/api/processor/stats")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
@@ -20,6 +22,9 @@ public class ProcessorStatsResource {
     @Inject
     TransactionProcessor processor;
 
+    @Inject
+    KafkaPartitionStats kafkaPartitionStats;
+
     @GET
     @Blocking
     public Map<String, Object> stats() {
@@ -27,6 +32,13 @@ public class ProcessorStatsResource {
                 "rejectedTotal",    processor.getRejectedCount(),
                 "rejectedByReason", processor.getRejectedByReason()
         );
+    }
+
+    @GET
+    @Path("/partition-lag")
+    @Blocking
+    public List<PartitionLag> partitionLag() {
+        return kafkaPartitionStats.getLag();
     }
 
     @PUT

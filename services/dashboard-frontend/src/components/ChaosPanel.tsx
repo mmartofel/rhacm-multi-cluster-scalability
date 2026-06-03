@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MetricsPayload } from '../types/metrics';
+import { MetricsPayload, PartitionStat } from '../types/metrics';
 import { ProcessingMode } from '../App';
 import { AWS_COLOR, GCP_COLOR } from '../colors';
 
@@ -162,6 +162,9 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         </div>
       </div>
 
+      {/* Partition map */}
+      <PartitionMap onpremWeight={onpremWeight ?? current.onpremWeight} payload={payload} />
+
       {/* Gateway health check */}
       <div style={{ marginBottom: 16 }}>
         <button
@@ -195,6 +198,65 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
           on GCP to sever the RHSI tunnel. MM2 pauses, GCP processor circuit-breaker opens.
           AWS continues unaffected. Re-apply the link token to recover.
         </div>
+      </div>
+    </div>
+  );
+}
+
+function formatLag(lag: number): string {
+  if (lag >= 1000000) return `${(lag / 1000000).toFixed(1)}M`;
+  if (lag >= 1000) return `${(lag / 1000).toFixed(1)}k`;
+  return String(lag);
+}
+
+interface PartitionMapProps {
+  onpremWeight: number;
+  payload: MetricsPayload | null;
+}
+
+function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
+  const onpremCount = Math.round(6 * onpremWeight / 100);
+
+  // Merge per-partition lag from both clusters: owned partitions carry the real lag
+  const lagMap = new Map<number, number>();
+  if (payload) {
+    for (const cluster of payload.clusters) {
+      for (const ps of (cluster.partitions ?? [])) {
+        if (ps.owned) lagMap.set(ps.partition, ps.lag);
+      }
+    }
+  }
+  const hasLag = lagMap.size > 0;
+  const maxLag = hasLag ? Math.max(1, ...Array.from(lagMap.values())) : 1;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Kafka Partitions — transactions-raw
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {Array.from({ length: 6 }, (_, p) => {
+          const isOnprem = p < onpremCount;
+          const color    = isOnprem ? AWS_COLOR : GCP_COLOR;
+          const lag      = lagMap.get(p);
+          const fillPct  = hasLag ? Math.max(4, Math.round((lag ?? 0) / maxLag * 100)) : 30;
+          return (
+            <div key={p} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              {/* Lag label above bar */}
+              <span style={{ fontSize: 10, color: hasLag ? color : '#4a4d52', fontWeight: 600, minHeight: 14 }}>
+                {hasLag ? formatLag(lag ?? 0) : '—'}
+              </span>
+              {/* Bar */}
+              <div style={{ width: '100%', height: 48, background: '#2a2d32', borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <div style={{ width: '100%', height: `${fillPct}%`, background: color, borderRadius: 4, opacity: hasLag ? 1 : 0.35, transition: 'height 0.4s ease, background 0.3s ease' }} />
+              </div>
+              {/* Partition number */}
+              <span style={{ fontSize: 10, color: color, fontWeight: 700 }}>{p}</span>
+              {/* Cluster label */}
+              <span style={{ fontSize: 9, color: '#6a6e73' }}>{isOnprem ? 'AWS' : 'GCP'}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

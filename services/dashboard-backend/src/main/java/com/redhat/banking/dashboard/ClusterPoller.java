@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+
 @ApplicationScoped
 public class ClusterPoller {
 
@@ -113,6 +115,15 @@ public class ClusterPoller {
             // so the dashboard can highlight the correct preset (e.g. High=200, Burst=300)
             // rather than just the onprem split portion (always capped at 100).
             m.generatorTps = dashboardResource.getLastTotalTps();
+        }
+
+        try {
+            String lagJson = httpGet(gatewayUrl + "/api/gateway/kafka/partition-lag");
+            List<ClusterMetrics.PartitionStat> stats =
+                    mapper.readValue(lagJson, new TypeReference<List<ClusterMetrics.PartitionStat>>() {});
+            m.partitions = stats;
+        } catch (Exception e) {
+            // leave empty — partition lag is best-effort
         }
 
         return m;

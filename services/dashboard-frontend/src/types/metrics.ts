@@ -1,5 +1,11 @@
 export const ONPREM_CAPACITY_TPS = 100;
 
+export interface PartitionStat {
+  partition: number;
+  lag: number;
+  owned: boolean;
+}
+
 export interface ClusterMetrics {
   cluster: string;
   tps: number;
@@ -13,6 +19,7 @@ export interface ClusterMetrics {
   processorReplicas: number;
   accountReplicas: number;
   rejectedTotal: number;
+  partitions?: PartitionStat[];
 }
 
 export interface MetricsPayload {

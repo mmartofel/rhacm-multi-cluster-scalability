@@ -30,7 +30,12 @@ export default function App() {
   const [payload, setPayload] = useState<MetricsPayload | null>(null);
   const [connected, setConnected] = useState(false);
   const [activeView, setActiveView] = useState<View>('overview');
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('auto-burst');
+  const onpremW = payload?.clusters.find(c => c.cluster === 'onprem')?.trafficWeight;
+  const processingMode: ProcessingMode =
+    onpremW === undefined ? 'auto-burst' :
+    onpremW === 0         ? 'cloud-only' :
+    onpremW === 100       ? 'auto-burst' :
+    'split';
 
   const tpmHistory = useRef<TpmPoint[]>([]);
   const throughputHistory = useRef<ThroughputPoint[]>([]);
@@ -131,7 +136,7 @@ export default function App() {
       case 'load-control':
         return <LoadControlPanel payload={payload} />;
       case 'chaos':
-        return <ChaosPanel payload={payload} processingMode={processingMode} onModeChange={setProcessingMode} />;
+        return <ChaosPanel payload={payload} processingMode={processingMode} />;
       case 'compliance':
         return <ComplianceWidget />;
       case 'autoscale':

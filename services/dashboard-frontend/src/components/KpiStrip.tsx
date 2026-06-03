@@ -35,6 +35,12 @@ export default function KpiStrip({ payload, processingMode }: Props) {
   const totalRejected = (onprem?.rejectedTotal ?? 0) + (cloud?.rejectedTotal ?? 0);
 
   const modeConf = MODE_CONFIG[processingMode];
+  const modeLabel = processingMode === 'split' && onprem
+    ? `Split ${onprem.trafficWeight} / ${100 - onprem.trafficWeight}`
+    : modeConf.label;
+  const modeSub = processingMode === 'split' && onprem
+    ? `${onprem.trafficWeight}% onprem · ${100 - onprem.trafficWeight}% cloud`
+    : modeConf.sub;
 
   const tiles: Tile[] = [
     {
@@ -51,8 +57,8 @@ export default function KpiStrip({ payload, processingMode }: Props) {
     },
     {
       label: 'Processing Mode',
-      value: payload ? modeConf.label : '—',
-      sub: payload ? modeConf.sub : 'waiting for data',
+      value: payload ? modeLabel : '—',
+      sub: payload ? modeSub : 'waiting for data',
       accent: payload ? modeConf.accent : '#6a6e73',
     },
     {
