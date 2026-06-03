@@ -1,5 +1,7 @@
 package com.redhat.banking.processor;
 
+import io.quarkus.logging.Log;
+import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -19,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+@Startup
 @ApplicationScoped
 public class KafkaPartitionStats {
 
@@ -45,6 +48,7 @@ public class KafkaPartitionStats {
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "2000");
         props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "3000");
         adminClient = AdminClient.create(props);
+        Log.infof("KafkaPartitionStats initialized — group=%s bootstrap=%s", consumerGroup, bootstrap);
 
         // Proactively refresh cache every 3 s — decoupled from HTTP request path
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -94,10 +98,23 @@ public class KafkaPartitionStats {
             }
 
             cached = result;
+            Log.debugf("Partition lag refreshed: %s", result);
         } catch (Exception e) {
-            // keep previous cached values on transient Kafka failure
+            Log.warnf("Partition lag refresh failed: %s", e.getMessage());
         }
     }
 
-    public record PartitionLag(int partition, long lag, boolean owned) {}
+    public static class PartitionLag {
+        public int partition;
+        public long lag;
+        public boolean owned;
+
+        public PartitionLag() {}
+
+        public PartitionLag(int partition, long lag, boolean owned) {
+            this.partition = partition;
+            this.lag = lag;
+            this.owned = owned;
+        }
+    }
 }
