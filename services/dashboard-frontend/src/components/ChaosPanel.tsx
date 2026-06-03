@@ -217,12 +217,16 @@ interface PartitionMapProps {
 function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
   const onpremCount = Math.round(6 * onpremWeight / 100);
 
-  // Merge per-partition lag from both clusters: owned partitions carry the real lag
-  const lagMap = new Map<number, number>();
+  // Build maps from actual runtime partition data
+  const lagMap   = new Map<number, number>();
+  const ownerMap = new Map<number, 'onprem' | 'cloud'>();
   if (payload) {
     for (const cluster of payload.clusters) {
       for (const ps of (cluster.partitions ?? [])) {
-        if (ps.owned) lagMap.set(ps.partition, ps.lag);
+        if (ps.owned) {
+          lagMap.set(ps.partition, ps.lag);
+          ownerMap.set(ps.partition, cluster.cluster as 'onprem' | 'cloud');
+        }
       }
     }
   }
@@ -236,10 +240,16 @@ function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         {Array.from({ length: 6 }, (_, p) => {
-          const isOnprem = p < onpremCount;
-          const color    = isOnprem ? AWS_COLOR : GCP_COLOR;
-          const lag      = lagMap.get(p);
-          const fillPct  = hasLag ? Math.max(4, Math.round((lag ?? 0) / maxLag * 100)) : 30;
+          // Colour: use actual runtime ownership when available, fall back to slider estimate
+          const isOnpremEstimate = p < onpremCount;
+          const color = ownerMap.size > 0
+            ? (ownerMap.get(p) === 'onprem' ? AWS_COLOR : ownerMap.has(p) ? GCP_COLOR : '#4a4d52')
+            : (isOnpremEstimate ? AWS_COLOR : GCP_COLOR);
+          const clusterLabel = ownerMap.size > 0
+            ? (ownerMap.get(p) === 'onprem' ? 'AWS' : ownerMap.has(p) ? 'GCP' : '—')
+            : (isOnpremEstimate ? 'AWS' : 'GCP');
+          const lag     = lagMap.get(p);
+          const fillPct = hasLag ? Math.max(4, Math.round((lag ?? 0) / maxLag * 100)) : 30;
           return (
             <div key={p} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               {/* Lag label above bar */}
@@ -253,7 +263,7 @@ function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
               {/* Partition number */}
               <span style={{ fontSize: 10, color: color, fontWeight: 700 }}>{p}</span>
               {/* Cluster label */}
-              <span style={{ fontSize: 9, color: '#6a6e73' }}>{isOnprem ? 'AWS' : 'GCP'}</span>
+              <span style={{ fontSize: 9, color: '#6a6e73' }}>{clusterLabel}</span>
             </div>
           );
         })}
