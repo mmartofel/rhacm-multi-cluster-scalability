@@ -2,8 +2,10 @@
 
 A multi-cluster banking transaction demo platform showing high availability, elasticity, data consistency, and zero-downtime upgrades across two OpenShift 4.21+ clusters, managed with **RHACM** and **OpenShift GitOps (Argo CD)**:
 
-- **`onprem`** — AWS (EC2), self-managed OCP. Static baseline capacity. Record-of-truth cluster: PostgreSQL primary, Kafka source, RHACM Hub, Argo CD.
-- **`cloud`** — GCP (GCE), self-managed OCP. Elastic capacity, scales to zero when idle via KEDA-driven autoscaling on Kafka consumer lag.
+- **`onprem`** — Self-managed OCP. Static baseline capacity. Record-of-truth cluster: PostgreSQL primary, Kafka source, RHACM Hub, Argo CD.
+- **`cloud`** — Self-managed OCP. Elastic capacity, scales to zero when idle via KEDA-driven autoscaling on Kafka consumer lag.
+
+`onprem` and `cloud` are logical roles, not specific infrastructure — either cluster can run on any provider (AWS, GCP, Azure, bare metal, etc.), and the two don't need to be on the same one. Nothing in this repo assumes a particular cloud; only the `onprem`/`cloud` context names and their roles matter.
 
 Cross-cluster connectivity runs over **Red Hat Service Interconnect (RHSI)**; both clusters are managed by **RHACM 2.16+**.
 
@@ -11,9 +13,9 @@ See [`CLAUDE.md`](CLAUDE.md) for the full architecture reference (services, data
 
 ## Prerequisites
 
-- Two OpenShift 4.21+ clusters already provisioned and reachable:
-  - `onprem` (AWS/EC2) — will act as the RHACM hub
-  - `cloud` (GCP/GCE) — will act as the managed spoke
+- Two OpenShift 4.21+ clusters already provisioned and reachable, on any infrastructure (mixing providers is fine):
+  - `onprem` — will act as the RHACM hub
+  - `cloud` — will act as the managed spoke
 - `oc` CLI (this repo uses `oc` exclusively — not `kubectl`)
 - A Quay.io (or other registry) account/robot token to push built images
 - Cluster-admin access on both clusters
@@ -21,14 +23,14 @@ See [`CLAUDE.md`](CLAUDE.md) for the full architecture reference (services, data
 
 ## 1. Configure cluster access
 
-Each cluster has its own kubeconfig file; `oc` merges them at runtime via a colon-separated `KUBECONFIG`. **Never merge them into one file.**
+Each cluster has its own kubeconfig file; `oc` merges them at runtime via a colon-separated `KUBECONFIG`. **Never merge them into one file.** The two clusters can be on different providers or infrastructure — only the `onprem`/`cloud` role matters, so log in to whichever cluster is playing each role for this run.
 
 ```bash
-# Log in to onprem, then save its kubeconfig
+# Log in to the cluster that will act as 'onprem', then save its kubeconfig
 oc login https://api.<onprem-cluster-domain>:6443
 ./get-kubeconfig.sh onprem
 
-# Log in to cloud, then save its kubeconfig
+# Log in to the cluster that will act as 'cloud', then save its kubeconfig
 oc login https://api.<cloud-cluster-domain>:6443
 ./get-kubeconfig.sh cloud
 
@@ -36,6 +38,8 @@ oc login https://api.<cloud-cluster-domain>:6443
 export KUBECONFIG="$(pwd)/kubeconfig-onprem:$(pwd)/kubeconfig-cloud"
 oc config get-contexts   # should list both 'onprem' and 'cloud'
 ```
+
+`get-kubeconfig.sh` renames the captured context to `onprem`/`cloud` regardless of the cluster's real name, so every other script can target `--context onprem|cloud` without caring where each cluster actually lives.
 
 `kubeconfig-onprem` and `kubeconfig-cloud` are git-ignored — never commit them. All bootstrap scripts auto-configure `KUBECONFIG` to these two files if you don't export it yourself.
 

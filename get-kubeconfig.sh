@@ -13,6 +13,13 @@ case "${1:-}" in
     exit 1
     ;;
 esac
+NAME="$1"
 
 oc config view --flatten --minify > "${OUT}"
-printf 'Wrote kubeconfig to %s\n' "${OUT}"
+
+# Rename the current context to 'onprem'/'cloud' so scripts can target it
+# with `oc --context onprem|cloud` regardless of the cluster's real name.
+CURRENT_CTX="$(oc --kubeconfig "${OUT}" config current-context)"
+oc --kubeconfig "${OUT}" config rename-context "${CURRENT_CTX}" "${NAME}" > /dev/null
+
+printf 'Wrote kubeconfig to %s (context renamed to %s)\n' "${OUT}" "${NAME}"
