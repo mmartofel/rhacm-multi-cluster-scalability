@@ -1,4 +1,4 @@
-# rhacm-multi-cluster-scalability
+# Multi cluster scalability for transaction processing application
 
 A multi-cluster banking transaction demo platform showing high availability, elasticity, data consistency, and zero-downtime upgrades across two OpenShift 4.21+ clusters, managed with **RHACM** and **OpenShift GitOps (Argo CD)**:
 
