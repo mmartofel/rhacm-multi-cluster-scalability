@@ -29,7 +29,7 @@ public class LedgerResource {
 
     private volatile long cachedTotalEntries = 0;
 
-    // Refresh the DB count via read datasource (cloud-local replica on GCP,
+    // Refresh the DB count via read datasource (cloud-local replica,
     // same datasource as write on onprem) to avoid Skupper round-trips.
     @Scheduled(every = "PT2S")
     void refreshCount() {

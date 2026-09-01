@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MetricsPayload, PartitionStat } from '../types/metrics';
 import { ProcessingMode } from '../App';
-import { AWS_COLOR, GCP_COLOR } from '../colors';
+import { ONPREM_COLOR, CLOUD_COLOR } from '../colors';
 
 interface Props {
   payload: MetricsPayload | null;
@@ -12,13 +12,13 @@ interface Props {
 // 7 steps aligned to Kafka partition boundaries (6 partitions total)
 // onprem owns [0..n-1], cloud owns [n..5] where n = round(6 * onpremWeight / 100)
 const STEPS = [
-  { onpremWeight: 0,   awsParts: '—',   gcpParts: '0–5' },
-  { onpremWeight: 17,  awsParts: '0',   gcpParts: '1–5' },
-  { onpremWeight: 33,  awsParts: '0–1', gcpParts: '2–5' },
-  { onpremWeight: 50,  awsParts: '0–2', gcpParts: '3–5' },
-  { onpremWeight: 67,  awsParts: '0–3', gcpParts: '4–5' },
-  { onpremWeight: 83,  awsParts: '0–4', gcpParts: '5'   },
-  { onpremWeight: 100, awsParts: '0–5', gcpParts: '—'   },
+  { onpremWeight: 0,   onpremParts: '—',   cloudParts: '0–5' },
+  { onpremWeight: 17,  onpremParts: '0',   cloudParts: '1–5' },
+  { onpremWeight: 33,  onpremParts: '0–1', cloudParts: '2–5' },
+  { onpremWeight: 50,  onpremParts: '0–2', cloudParts: '3–5' },
+  { onpremWeight: 67,  onpremParts: '0–3', cloudParts: '4–5' },
+  { onpremWeight: 83,  onpremParts: '0–4', cloudParts: '5'   },
+  { onpremWeight: 100, onpremParts: '0–5', cloudParts: '—'   },
 ];
 
 function nearestStep(onpremWeight: number): number {
@@ -61,9 +61,9 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         body: JSON.stringify({ trafficWeight: STEPS[s].onpremWeight }),
       });
       const json = await res.json();
-      const aws = json.onprem ?? STEPS[s].onpremWeight;
-      const gcp = json.cloud  ?? (100 - STEPS[s].onpremWeight);
-      setStatus({ msg: `Traffic updated — AWS ${aws}% · GCP ${gcp}%`, ok: true });
+      const onprem = json.onprem ?? STEPS[s].onpremWeight;
+      const cloud  = json.cloud  ?? (100 - STEPS[s].onpremWeight);
+      setStatus({ msg: `Traffic updated — On-Prem ${onprem}% · Cloud ${cloud}%`, ok: true });
       onModeChange?.(stepToMode(s));
     } catch (e: any) {
       setStatus({ msg: `Error: ${e.message}`, ok: false });
@@ -78,9 +78,9 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
     debounceRef.current = setTimeout(() => applyStep(newStep), 400);
   };
 
-  const current = STEPS[step];
-  const awsPct  = current.onpremWeight;
-  const gcpPct  = 100 - current.onpremWeight;
+  const current   = STEPS[step];
+  const onpremPct = current.onpremWeight;
+  const cloudPct  = 100 - current.onpremWeight;
 
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16, height: '100%' }}>
@@ -91,9 +91,9 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 6 }}>Current split (live)</div>
         {onpremWeight !== null ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: AWS_COLOR, fontWeight: 700 }}>AWS {onpremWeight}%</span>
+            <span style={{ fontSize: 12, color: ONPREM_COLOR, fontWeight: 700 }}>On-Prem {onpremWeight}%</span>
             <span style={{ fontSize: 11, color: '#6a6e73' }}>·</span>
-            <span style={{ fontSize: 12, color: GCP_COLOR, fontWeight: 700 }}>GCP {cloudWeight ?? 100 - onpremWeight}%</span>
+            <span style={{ fontSize: 12, color: CLOUD_COLOR, fontWeight: 700 }}>Cloud {cloudWeight ?? 100 - onpremWeight}%</span>
           </div>
         ) : (
           <span style={{ fontSize: 12, color: '#6a6e73' }}>waiting for data…</span>
@@ -119,11 +119,11 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
       <div style={{ marginBottom: 18 }}>
         {/* Endpoint labels */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ fontSize: 13, color: AWS_COLOR, fontWeight: 700 }}>AWS {awsPct}%</span>
+          <span style={{ fontSize: 13, color: ONPREM_COLOR, fontWeight: 700 }}>On-Prem {onpremPct}%</span>
           <span style={{ fontSize: 11, color: '#8a8d90' }}>
-            AWS [{current.awsParts}] · GCP [{current.gcpParts}]
+            On-Prem [{current.onpremParts}] · Cloud [{current.cloudParts}]
           </span>
-          <span style={{ fontSize: 13, color: GCP_COLOR, fontWeight: 700 }}>GCP {gcpPct}%</span>
+          <span style={{ fontSize: 13, color: CLOUD_COLOR, fontWeight: 700 }}>Cloud {cloudPct}%</span>
         </div>
 
         {/* Range input */}
@@ -137,7 +137,7 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
           onChange={e => handleSliderChange(Number(e.target.value))}
           style={{
             width: '100%',
-            accentColor: AWS_COLOR,
+            accentColor: ONPREM_COLOR,
             cursor: pending ? 'wait' : 'pointer',
             margin: 0,
           }}
@@ -195,8 +195,8 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         <div style={{ fontSize: 12, fontWeight: 600, color: '#8a8d90', marginBottom: 6 }}>Simulate link failure</div>
         <div style={{ fontSize: 11, color: '#6a6e73', lineHeight: 1.7 }}>
           Delete the <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>skupper-link</code> Secret
-          on GCP to sever the RHSI tunnel. MM2 pauses, GCP processor circuit-breaker opens.
-          AWS continues unaffected. Re-apply the link token to recover.
+          on Cloud to sever the RHSI tunnel. MM2 pauses, Cloud processor circuit-breaker opens.
+          On-Prem continues unaffected. Re-apply the link token to recover.
         </div>
       </div>
     </div>
@@ -243,11 +243,11 @@ function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
           // Colour: use actual runtime ownership when available, fall back to slider estimate
           const isOnpremEstimate = p < onpremCount;
           const color = ownerMap.size > 0
-            ? (ownerMap.get(p) === 'onprem' ? AWS_COLOR : ownerMap.has(p) ? GCP_COLOR : '#4a4d52')
-            : (isOnpremEstimate ? AWS_COLOR : GCP_COLOR);
+            ? (ownerMap.get(p) === 'onprem' ? ONPREM_COLOR : ownerMap.has(p) ? CLOUD_COLOR : '#4a4d52')
+            : (isOnpremEstimate ? ONPREM_COLOR : CLOUD_COLOR);
           const clusterLabel = ownerMap.size > 0
-            ? (ownerMap.get(p) === 'onprem' ? 'AWS' : ownerMap.has(p) ? 'GCP' : '—')
-            : (isOnpremEstimate ? 'AWS' : 'GCP');
+            ? (ownerMap.get(p) === 'onprem' ? 'On-Prem' : ownerMap.has(p) ? 'Cloud' : '—')
+            : (isOnpremEstimate ? 'On-Prem' : 'Cloud');
           const lag     = lagMap.get(p);
           const fillPct = hasLag ? Math.max(4, Math.round((lag ?? 0) / maxLag * 100)) : 30;
           return (

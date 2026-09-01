@@ -3,10 +3,9 @@ kind: ManagedCluster
 metadata:
   name: cloud
   labels:
-    cloud: GCP
+    cloud: "true"
     vendor: OpenShift
     env: burst
-    region: us-central1
 spec:
   hubAcceptsClient: true
   leaseDurationSeconds: 60

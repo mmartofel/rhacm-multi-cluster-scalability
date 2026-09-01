@@ -7,8 +7,8 @@ const PRESETS = [
   { label: 'Quiet',  tps: 0,   color: '#6a6e73', description: 'System idle — all processors drain, KEDA scales cloud to 0 replicas.' },
   { label: 'Low',    tps: 50,  color: '#4cb140', description: '50 TPS — all onprem (under capacity). Cloud generator stays at 0 TPS, KEDA holds 0 replicas.' },
   { label: 'Medium', tps: 100, color: '#06c',    description: '100 TPS — onprem at full capacity. Cloud TPS = 0, no burst needed.' },
-  { label: 'High',   tps: 200, color: '#f4c145', description: '200 TPS — 100 TPS onprem + 100 TPS cloud burst. Watch KEDA ramp to ~7 GCP pods over ~90 s.' },
-  { label: 'Burst',  tps: 300, color: '#c9190b', description: '300 TPS — 100 TPS onprem + 200 TPS cloud burst. KEDA scales to ~14 GCP pods at full throughput.' },
+  { label: 'High',   tps: 200, color: '#f4c145', description: '200 TPS — 100 TPS onprem + 100 TPS cloud burst. Watch KEDA ramp to ~7 Cloud pods over ~90 s.' },
+  { label: 'Burst',  tps: 300, color: '#c9190b', description: '300 TPS — 100 TPS onprem + 200 TPS cloud burst. KEDA scales to ~14 Cloud pods at full throughput.' },
 ];
 
 export default function LoadControlPanel({ payload }: Props) {
@@ -103,7 +103,7 @@ export default function LoadControlPanel({ payload }: Props) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, fontSize: 12, color: '#8a8d90' }}>
           <div>■ TPM chart — red dashed line marks onprem capacity (6000 TPM)</div>
           <div>■ KPI strip — Processing Mode switches Onprem Only → Cloud Burst at 100 TPS</div>
-          <div>■ Autoscale Watch — GCP pod count ramps gradually over ~90 s (lagThreshold=500)</div>
+          <div>■ Autoscale Watch — Cloud pod count ramps gradually over ~90 s (lagThreshold=500)</div>
           <div>■ Cloud pods stay up 1 min after load drops (cooldownPeriod=60 s)</div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { MetricsPayload, ONPREM_CAPACITY_TPS } from '../types/metrics';
 import { ProcessingMode } from '../App';
-import { AWS_COLOR, GCP_COLOR, CAPACITY_COLOR, HEALTHY_COLOR } from '../colors';
+import { ONPREM_COLOR, CLOUD_COLOR, CAPACITY_COLOR, HEALTHY_COLOR } from '../colors';
 
 interface Props {
   payload: MetricsPayload | null;
@@ -16,10 +16,10 @@ interface Tile {
 }
 
 const MODE_CONFIG: Record<ProcessingMode, { label: string; sub: string; accent: string }> = {
-  'auto-burst':  { label: 'Auto Burst',        sub: '≤100 TPS onprem · cloud scales on overflow', accent: HEALTHY_COLOR },
-  'onprem-only': { label: 'Route 100% → AWS',  sub: 'all traffic routed to onprem cluster',       accent: AWS_COLOR    },
-  'split':       { label: 'Split 50 / 50',     sub: 'traffic split equally across clusters',       accent: '#8476d1'   },
-  'cloud-only':  { label: 'Route 100% → GCP',  sub: 'all traffic routed to cloud cluster',        accent: GCP_COLOR    },
+  'auto-burst':  { label: 'Auto Burst',          sub: '≤100 TPS onprem · cloud scales on overflow', accent: HEALTHY_COLOR },
+  'onprem-only': { label: 'Route 100% → On-Prem', sub: 'all traffic routed to onprem cluster',       accent: ONPREM_COLOR  },
+  'split':       { label: 'Split 50 / 50',       sub: 'traffic split equally across clusters',       accent: '#8476d1'     },
+  'cloud-only':  { label: 'Route 100% → Cloud',  sub: 'all traffic routed to cloud cluster',        accent: CLOUD_COLOR   },
 };
 
 export default function KpiStrip({ payload, processingMode }: Props) {
@@ -47,7 +47,7 @@ export default function KpiStrip({ payload, processingMode }: Props) {
       label: 'Total Throughput',
       value: payload ? totalTpm.toLocaleString('en', { maximumFractionDigits: 0 }) : '—',
       sub: 'transactions / min',
-      accent: AWS_COLOR,
+      accent: ONPREM_COLOR,
     },
     {
       label: 'Generator Rate',

@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Chart, ChartArea, ChartAxis, ChartGroup, ChartLine, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { TpmPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
-import { AWS_COLOR, AWS_COLOR_ALPHA, GCP_COLOR, GCP_COLOR_ALPHA, DARK_AXIS } from '../colors';
+import { ONPREM_COLOR, ONPREM_COLOR_ALPHA, CLOUD_COLOR, CLOUD_COLOR_ALPHA, DARK_AXIS } from '../colors';
 
 interface Props { history: TpmPoint[]; }
 
@@ -28,8 +28,8 @@ export default function TpmChart({ history }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 12px 12px' }}>
         <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 14 }}>TPM Over Time</span>
         <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
-          <span style={{ color: AWS_COLOR }}>■ AWS (on-prem)</span>
-          <span style={{ color: GCP_COLOR }}>■ GCP (cloud burst)</span>
+          <span style={{ color: ONPREM_COLOR }}>■ On-Prem</span>
+          <span style={{ color: CLOUD_COLOR }}>■ Cloud</span>
           <span style={{ color: '#c9190b' }}>– – Onprem capacity ({ONPREM_CAPACITY_TPS} TPS)</span>
         </div>
       </div>
@@ -57,12 +57,12 @@ export default function TpmChart({ history }: Props) {
             <ChartAxis dependentAxis tickFormat={(t: number) => `${Math.round(t)}`} style={DARK_AXIS} />
             <ChartGroup>
               <ChartArea
-                data={history.map(p => ({ x: p.ts, y: p.onprem, name: 'AWS' }))}
-                style={{ data: { fill: AWS_COLOR_ALPHA, stroke: AWS_COLOR, strokeWidth: 2 } }}
+                data={history.map(p => ({ x: p.ts, y: p.onprem, name: 'On-Prem' }))}
+                style={{ data: { fill: ONPREM_COLOR_ALPHA, stroke: ONPREM_COLOR, strokeWidth: 2 } }}
               />
               <ChartArea
-                data={history.map(p => ({ x: p.ts, y: p.cloud, name: 'GCP' }))}
-                style={{ data: { fill: GCP_COLOR_ALPHA, stroke: GCP_COLOR, strokeWidth: 2 } }}
+                data={history.map(p => ({ x: p.ts, y: p.cloud, name: 'Cloud' }))}
+                style={{ data: { fill: CLOUD_COLOR_ALPHA, stroke: CLOUD_COLOR, strokeWidth: 2 } }}
               />
             </ChartGroup>
             <ChartLine

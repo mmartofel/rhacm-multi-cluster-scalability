@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Chart, ChartLine, ChartAxis, ChartGroup, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { ThroughputPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
-import { AWS_COLOR, GCP_COLOR, GEN_COLOR, DARK_AXIS } from '../colors';
+import { ONPREM_COLOR, CLOUD_COLOR, GEN_COLOR, DARK_AXIS } from '../colors';
 
 interface Props { history: ThroughputPoint[]; }
 
@@ -28,8 +28,8 @@ export default function ThroughputChart({ history }: Props) {
         <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 14 }}>Processing Throughput Analysis</span>
         <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
           <span style={{ color: GEN_COLOR }}>— Generator</span>
-          <span style={{ color: AWS_COLOR }}>— AWS commit</span>
-          <span style={{ color: GCP_COLOR }}>— GCP commit</span>
+          <span style={{ color: ONPREM_COLOR }}>— On-Prem commit</span>
+          <span style={{ color: CLOUD_COLOR }}>— Cloud commit</span>
           <span style={{ color: '#c9190b' }}>– – Onprem cap. ({ONPREM_CAPACITY_TPS} TPS)</span>
         </div>
       </div>
@@ -67,12 +67,12 @@ export default function ThroughputChart({ history }: Props) {
                 style={{ data: { stroke: GEN_COLOR, strokeWidth: 2, strokeDasharray: '6,3' } }}
               />
               <ChartLine
-                data={history.map(p => ({ x: p.ts, y: p.onpremCommit, name: 'AWS commit' }))}
-                style={{ data: { stroke: AWS_COLOR, strokeWidth: 2 } }}
+                data={history.map(p => ({ x: p.ts, y: p.onpremCommit, name: 'On-Prem commit' }))}
+                style={{ data: { stroke: ONPREM_COLOR, strokeWidth: 2 } }}
               />
               <ChartLine
-                data={history.map(p => ({ x: p.ts, y: p.cloudCommit, name: 'GCP commit' }))}
-                style={{ data: { stroke: GCP_COLOR, strokeWidth: 2 } }}
+                data={history.map(p => ({ x: p.ts, y: p.cloudCommit, name: 'Cloud commit' }))}
+                style={{ data: { stroke: CLOUD_COLOR, strokeWidth: 2 } }}
               />
             </ChartGroup>
             <ChartLine

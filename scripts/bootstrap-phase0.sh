@@ -62,7 +62,7 @@ wait_for "MultiClusterHub" 1200 \
     -o jsonpath='{.status.phase}' 2>/dev/null | grep -q '^Running$'"
 ok "MultiClusterHub running"
 
-# ── Step d: Import GCP cluster ─────────────────────────────────────────────
+# ── Step d: Import cloud (spoke) cluster ────────────────────────────────────
 log "Step d: ManagedCluster import (hub: ${ONPREM}, spoke: ${CLOUD})"
 
 if oc --context "${ONPREM}" get managedcluster cloud \

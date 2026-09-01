@@ -1,6 +1,6 @@
 # Multi-Cluster Banking Transaction Platform
 ## C4 Architecture Diagrams
-### Red Hat OpenShift — AWS (on-prem sim) + GCP (cloud burst)
+### Red Hat OpenShift — On-Prem + Cloud
 
 ---
 
@@ -18,8 +18,8 @@ C4Context
 
   System(platform, "Banking Transaction Platform", "Processes synthetic DEBIT/CREDIT transactions across two OpenShift clusters. Demonstrates HA, elasticity, data consistency, and zero-downtime upgrades.")
 
-  System_Ext(aws, "AWS (Cluster 1 — On-Prem Sim)", "Self-managed OpenShift 4.21+. Static baseline capacity. Record-of-truth cluster.")
-  System_Ext(gcp, "GCP (Cluster 2 — Cloud Burst)", "Self-managed OpenShift 4.21+. Elastic burst capacity. Scales to zero when idle.")
+  System_Ext(onprem, "On-Prem (Cluster 1)", "Self-managed OpenShift 4.21+. Static baseline capacity. Record-of-truth cluster.")
+  System_Ext(cloud, "Cloud (Cluster 2)", "Self-managed OpenShift 4.21+. Elastic burst capacity. Scales to zero when idle.")
   System_Ext(quay, "Quay.io", "Container image registry. Stores all built service images. RHACS scans on pull.")
   System_Ext(git, "Git Repository", "Single monorepo. Argo CD watches for changes. Source of truth for all config and code.")
 
@@ -28,9 +28,9 @@ C4Context
   Rel(dev, git, "Pushes code", "git push")
   Rel(git, platform, "Triggers GitOps sync", "Argo CD webhook")
   Rel(platform, quay, "Pulls images", "HTTPS — image pull on deploy")
-  Rel(platform, aws, "Primary workload runs on", "OCP 4.21+")
-  Rel(platform, gcp, "Burst workload runs on", "OCP 4.21+")
-  Rel(aws, gcp, "Cross-cluster service mesh", "RHSI mTLS over HTTPS")
+  Rel(platform, onprem, "Primary workload runs on", "OCP 4.21+")
+  Rel(platform, cloud, "Burst workload runs on", "OCP 4.21+")
+  Rel(onprem, cloud, "Cross-cluster service mesh", "RHSI mTLS over HTTPS")
 
   UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
 ```
@@ -48,38 +48,38 @@ C4Container
   Person(ops, "Platform / Ops Engineer", "")
   Person(user, "Exec / Developer", "")
 
-  Boundary(aws_cluster, "Cluster 1 — AWS  |  OpenShift 4.21+  |  Namespace: banking-demo / banking-infra") {
+  Boundary(onprem_cluster, "Cluster 1 — On-Prem  |  OpenShift 4.21+  |  Namespace: banking-demo / banking-infra") {
 
-    Container(gen_aws, "transaction-generator", "Quarkus 3 / JVM", "Emits synthetic DEBIT/CREDIT TransactionEvents to Kafka at configurable TPS")
-    Container(proc_aws, "transaction-processor", "Quarkus 3 Native + KEDA", "Consumes Kafka events, validates balance, writes to PostgreSQL, emits TransactionCommitted")
-    Container(acct_aws, "account-service", "Quarkus 3 REST", "Account balance reads via @CacheResult in-process cache. Reads PostgreSQL directly.")
-    Container(ledger_aws, "ledger-service", "Quarkus 3 REST", "Authoritative running balance. Serves REST to dashboard-backend.")
+    Container(gen_onprem, "transaction-generator", "Quarkus 3 / JVM", "Emits synthetic DEBIT/CREDIT TransactionEvents to Kafka at configurable TPS")
+    Container(proc_onprem, "transaction-processor", "Quarkus 3 Native + KEDA", "Consumes Kafka events, validates balance, writes to PostgreSQL, emits TransactionCommitted")
+    Container(acct_onprem, "account-service", "Quarkus 3 REST", "Account balance reads via @CacheResult in-process cache. Reads PostgreSQL directly.")
+    Container(ledger_onprem, "ledger-service", "Quarkus 3 REST", "Authoritative running balance. Serves REST to dashboard-backend.")
     Container(gateway, "cluster-gateway", "Quarkus 3 REST", "Traffic weight control. Aggregated /health and /metrics endpoint.")
     Container(dash_be, "dashboard-backend", "Quarkus 3 WebSocket", "Polls both clusters every 500ms. Aggregates and streams MetricsPayload.")
     Container(dash_fe, "dashboard-frontend", "React 18 + Patternfly 5", "Live dashboard: cluster map, TPS gauges, chaos panel, compliance widget.")
 
-    ContainerDb(kafka_aws, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Topics: transactions-raw, transactions-committed, transactions-dlq")
-    ContainerDb(pg_aws, "PostgreSQL Primary", "Crunchy Postgres for Kubernetes v5", "Accounts + transactions tables. EBS-backed PVC. PgBouncer pooling.")
-    Container(mm2, "MirrorMaker 2", "Streams for Apache Kafka", "Replicates transactions-raw AWS → GCP via RHSI virtual service")
+    ContainerDb(kafka_onprem, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Topics: transactions-raw, transactions-committed, transactions-dlq")
+    ContainerDb(pg_onprem, "PostgreSQL Primary", "Crunchy Postgres for Kubernetes v5", "Accounts + transactions tables. Default-storage-class PVC. PgBouncer pooling.")
+    Container(mm2, "MirrorMaker 2", "Streams for Apache Kafka", "Replicates transactions-raw On-Prem → Cloud via RHSI virtual service")
     Container(apicurio, "Apicurio Registry", "Apicurio 2.x", "Avro schema registry. Enforces backward compatibility.")
-    Container(skupper_aws, "RHSI Router", "Red Hat Service Interconnect 2", "L7 AMQP router. Issues link token. Exposes kafka-bootstrap, postgresql-primary as virtual services.")
+    Container(skupper_onprem, "RHSI Router", "Red Hat Service Interconnect 2", "L7 AMQP router. Issues link token. Exposes kafka-bootstrap, postgresql-primary as virtual services.")
     Container(rhacm, "RHACM Hub", "RHACM 2.16+", "Manages both clusters. Placement policies. Observability federation. Governance.")
     Container(argocd, "Argo CD", "OpenShift GitOps 1.13+", "ApplicationSets deploy all services to both clusters via Kustomize overlays.")
-    Container(ossm_aws, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker, VirtualService for AWS workloads.")
+    Container(ossm_onprem, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker, VirtualService for On-Prem workloads.")
   }
 
-  Boundary(gcp_cluster, "Cluster 2 — GCP  |  OpenShift 4.21+  |  Namespace: banking-demo / banking-infra") {
+  Boundary(cloud_cluster, "Cluster 2 — Cloud  |  OpenShift 4.21+  |  Namespace: banking-demo / banking-infra") {
 
-    Container(gen_gcp, "transaction-generator", "Quarkus 3 / JVM", "Emits events to local Kafka replica. TPS split configurable via ConfigMap.")
-    Container(proc_gcp, "transaction-processor", "Quarkus 3 Native + KEDA", "Consumes local Kafka replica. Writes to AWS PostgreSQL via RHSI. Scales 0–20.")
-    Container(acct_gcp, "account-service", "Quarkus 3 REST", "@CacheResult in-process cache. 0–5 replicas via HPA.")
-    Container(ledger_gcp, "ledger-service", "Quarkus 3 REST", "Read-only from PostgreSQL standby. Serves GCP-local latency reads.")
+    Container(gen_cloud, "transaction-generator", "Quarkus 3 / JVM", "Emits events to local Kafka replica. TPS split configurable via ConfigMap.")
+    Container(proc_cloud, "transaction-processor", "Quarkus 3 Native + KEDA", "Consumes local Kafka replica. Writes to On-Prem PostgreSQL via RHSI. Scales 0–20.")
+    Container(acct_cloud, "account-service", "Quarkus 3 REST", "@CacheResult in-process cache. 0–5 replicas via HPA.")
+    Container(ledger_cloud, "ledger-service", "Quarkus 3 REST", "Read-only from PostgreSQL standby. Serves Cloud-local latency reads.")
 
-    ContainerDb(kafka_gcp, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Receives replicated topics from AWS via MirrorMaker 2.")
-    ContainerDb(pg_gcp, "PostgreSQL Standby", "Crunchy Postgres for Kubernetes v5", "Streaming replica from AWS primary. Read-only. PD-backed PVC.")
-    Container(skupper_gcp, "RHSI Router", "Red Hat Service Interconnect 2", "Consumes link token from AWS. Provides virtual services: kafka-bootstrap, postgresql-primary.")
-    Container(ossm_gcp, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker for GCP workloads.")
-    Container(keda_gcp, "Custom Metrics Autoscaler", "CMA v2.18 (KEDA 2.x)", "Scales transaction-processor on Kafka consumer group lag. 0→20 replicas.")
+    ContainerDb(kafka_cloud, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Receives replicated topics from On-Prem via MirrorMaker 2.")
+    ContainerDb(pg_cloud, "PostgreSQL Standby", "Crunchy Postgres for Kubernetes v5", "Streaming replica from On-Prem primary. Read-only. Default-storage-class PVC.")
+    Container(skupper_cloud, "RHSI Router", "Red Hat Service Interconnect 2", "Consumes link token from On-Prem. Provides virtual services: kafka-bootstrap, postgresql-primary.")
+    Container(ossm_cloud, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker for Cloud workloads.")
+    Container(keda_cloud, "Custom Metrics Autoscaler", "CMA v2.18 (KEDA 2.x)", "Scales transaction-processor on Kafka consumer group lag. 0→20 replicas.")
   }
 
   Boundary(shared_infra, "Shared External Services") {
@@ -91,37 +91,37 @@ C4Container
   Rel(ops, dash_fe, "Operates chaos panel", "HTTPS")
   Rel(ops, rhacm, "Manages clusters", "HTTPS — RHACM console")
   Rel(dash_fe, dash_be, "WebSocket stream", "WSS /ws/metrics")
-  Rel(dash_be, ledger_aws, "Polls ledger", "HTTP REST")
-  Rel(dash_be, ledger_gcp, "Polls ledger", "HTTP REST via RHSI")
+  Rel(dash_be, ledger_onprem, "Polls ledger", "HTTP REST")
+  Rel(dash_be, ledger_cloud, "Polls ledger", "HTTP REST via RHSI")
   Rel(dash_be, gateway, "Polls health + metrics", "HTTP REST")
 
-  Rel(gen_aws, kafka_aws, "Publishes TransactionEvent", "Kafka producer / Avro")
-  Rel(gen_gcp, kafka_gcp, "Publishes TransactionEvent", "Kafka producer / Avro")
-  Rel(proc_aws, kafka_aws, "Consumes transactions-raw", "Kafka consumer group")
-  Rel(proc_gcp, kafka_gcp, "Consumes replicated transactions-raw", "Kafka consumer group")
-  Rel(proc_aws, acct_aws, "Balance check", "HTTP REST")
-  Rel(proc_gcp, acct_gcp, "Balance check", "HTTP REST")
-  Rel(proc_aws, pg_aws, "Writes committed tx", "JDBC / PgBouncer")
-  Rel(proc_gcp, pg_aws, "Writes committed tx via RHSI", "JDBC → RHSI → AWS primary")
-  Rel(proc_aws, kafka_aws, "Publishes TransactionCommitted", "Kafka producer / Avro")
-  Rel(proc_gcp, kafka_gcp, "Publishes TransactionCommitted", "Kafka producer / Avro")
+  Rel(gen_onprem, kafka_onprem, "Publishes TransactionEvent", "Kafka producer / Avro")
+  Rel(gen_cloud, kafka_cloud, "Publishes TransactionEvent", "Kafka producer / Avro")
+  Rel(proc_onprem, kafka_onprem, "Consumes transactions-raw", "Kafka consumer group")
+  Rel(proc_cloud, kafka_cloud, "Consumes replicated transactions-raw", "Kafka consumer group")
+  Rel(proc_onprem, acct_onprem, "Balance check", "HTTP REST")
+  Rel(proc_cloud, acct_cloud, "Balance check", "HTTP REST")
+  Rel(proc_onprem, pg_onprem, "Writes committed tx", "JDBC / PgBouncer")
+  Rel(proc_cloud, pg_onprem, "Writes committed tx via RHSI", "JDBC → RHSI → On-Prem primary")
+  Rel(proc_onprem, kafka_onprem, "Publishes TransactionCommitted", "Kafka producer / Avro")
+  Rel(proc_cloud, kafka_cloud, "Publishes TransactionCommitted", "Kafka producer / Avro")
 
 
-  Rel(ledger_aws, pg_aws, "Reads ledger", "JDBC")
-  Rel(ledger_gcp, pg_gcp, "Reads from standby", "JDBC")
+  Rel(ledger_onprem, pg_onprem, "Reads ledger", "JDBC")
+  Rel(ledger_cloud, pg_cloud, "Reads from standby", "JDBC")
 
-  Rel(mm2, kafka_aws, "Reads source topics", "Kafka consumer")
-  Rel(mm2, kafka_gcp, "Writes replicated topics", "Kafka producer via RHSI")
+  Rel(mm2, kafka_onprem, "Reads source topics", "Kafka consumer")
+  Rel(mm2, kafka_cloud, "Writes replicated topics", "Kafka producer via RHSI")
 
-  Rel(skupper_aws, skupper_gcp, "mTLS router link", "HTTPS — AMQP over TLS")
+  Rel(skupper_onprem, skupper_cloud, "mTLS router link", "HTTPS — AMQP over TLS")
 
   Rel(argocd, git, "Watches for changes", "git poll / webhook")
-  Rel(argocd, aws_cluster, "Deploys via Kustomize", "oc apply")
-  Rel(argocd, gcp_cluster, "Deploys via Kustomize", "oc apply")
+  Rel(argocd, onprem_cluster, "Deploys via Kustomize", "oc apply")
+  Rel(argocd, cloud_cluster, "Deploys via Kustomize", "oc apply")
 
-  Rel(gen_aws, apicurio, "Fetches Avro schema", "HTTPS")
-  Rel(gen_gcp, apicurio, "Fetches Avro schema", "HTTPS via RHSI")
-  Rel(proc_aws, apicurio, "Fetches Avro schema", "HTTPS")
+  Rel(gen_onprem, apicurio, "Fetches Avro schema", "HTTPS")
+  Rel(gen_cloud, apicurio, "Fetches Avro schema", "HTTPS via RHSI")
+  Rel(proc_onprem, apicurio, "Fetches Avro schema", "HTTPS")
 
   UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
 ```
@@ -136,61 +136,61 @@ Shows how containers map to physical/cloud infrastructure, storage, and network 
 C4Deployment
   title Deployment Diagram — Multi-Cluster Banking Transaction Platform
 
-  Deployment_Node(aws_cloud, "Amazon Web Services", "us-east-1 (or preferred region)") {
+  Deployment_Node(onprem_infra, "On-Prem Provider", "region-specific — whatever the underlying provider offers for this run") {
 
-    Deployment_Node(aws_ocp, "OpenShift 4.21+ Self-Managed", "3× control plane EC2  |  3–6× worker EC2  |  Default storage class: AWS EBS (gp2/gp3)") {
+    Deployment_Node(onprem_ocp, "OpenShift 4.21+ Self-Managed", "3× control plane nodes  |  3–6× worker nodes  |  Default storage class of the provider") {
 
-      Deployment_Node(ns_infra_aws, "Namespace: banking-infra") {
-        Container(kafka_aws_d, "Streams for Apache Kafka", "KRaft mode  |  3 controller pods (5Gi PVC)  |  3 broker pods (20Gi PVC)  |  Default SC: EBS")
-        Container(mm2_d, "MirrorMaker 2", "1–2 pods  |  Replicates to GCP via RHSI")
-        Container(pg_aws_d, "PostgreSQL Primary", "3-node HA  |  PgBouncer sidecar  |  PVC: EBS default SC")
+      Deployment_Node(ns_infra_onprem, "Namespace: banking-infra") {
+        Container(kafka_onprem_d, "Streams for Apache Kafka", "KRaft mode  |  3 controller pods (5Gi PVC)  |  3 broker pods (20Gi PVC)  |  Default storage class")
+        Container(mm2_d, "MirrorMaker 2", "1–2 pods  |  Replicates to Cloud via RHSI")
+        Container(pg_onprem_d, "PostgreSQL Primary", "3-node HA  |  PgBouncer sidecar  |  PVC: default storage class")
         Container(apicurio_d, "Apicurio Registry", "1 pod  |  kafkasql-backed (2.5.11.Final)")
-        Container(skupper_aws_d, "RHSI Router", "1 pod  |  Exposes 2 virtual services  |  Route: skupper.apps.<aws-domain>")
+        Container(skupper_onprem_d, "RHSI Router", "1 pod  |  Exposes 2 virtual services  |  Route: skupper.apps.<onprem-domain>")
       }
 
-      Deployment_Node(ns_demo_aws, "Namespace: banking-demo") {
-        Container(gen_aws_d, "transaction-generator", "1 pod  |  ConfigMap: TPS=200")
-        Container(proc_aws_d, "transaction-processor", "1–10 pods  |  KEDA: lag threshold 100")
-        Container(acct_aws_d, "account-service", "2 pods  |  HPA: CPU 60%")
-        Container(ledger_aws_d, "ledger-service", "2 pods")
+      Deployment_Node(ns_demo_onprem, "Namespace: banking-demo") {
+        Container(gen_onprem_d, "transaction-generator", "1 pod  |  ConfigMap: TPS=200")
+        Container(proc_onprem_d, "transaction-processor", "1–10 pods  |  KEDA: lag threshold 100")
+        Container(acct_onprem_d, "account-service", "1 pod  |  HPA: CPU 60%")
+        Container(ledger_onprem_d, "ledger-service", "2 pods")
         Container(gateway_d, "cluster-gateway", "2 pods  |  Manages Istio VS weights")
         Container(dash_be_d, "dashboard-backend", "2 pods  |  WebSocket /ws/metrics")
-        Container(dash_fe_d, "dashboard-frontend", "2 pods  |  Route: dashboard.apps.<aws-domain>  |  TLS via cert-manager")
+        Container(dash_fe_d, "dashboard-frontend", "2 pods  |  Route: dashboard.apps.<onprem-domain>  |  TLS via cert-manager")
       }
 
-      Deployment_Node(ns_platform_aws, "Platform Namespaces") {
+      Deployment_Node(ns_platform_onprem, "Platform Namespaces") {
         Container(rhacm_d, "RHACM Hub", "open-cluster-management NS  |  MultiClusterHub CR")
         Container(argocd_d, "Argo CD", "openshift-gitops NS  |  ApplicationSets for both clusters")
-        Container(ossm_aws_d, "OSSM Control Plane", "istio-system NS  |  SMCP + SMMR")
-        Container(keda_aws_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects for transaction-processor")
+        Container(ossm_onprem_d, "OSSM Control Plane", "istio-system NS  |  SMCP + SMMR")
+        Container(keda_onprem_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects for transaction-processor")
         Container(rhacs_d, "RHACS Central", "stackrox NS  |  Policy engine + pipeline gate")
-        Container(monitoring_aws, "Observability Stack", "banking-monitoring NS  |  Grafana + Jaeger + Prometheus rules")
+        Container(monitoring_onprem, "Observability Stack", "banking-monitoring NS  |  Grafana + Jaeger + Prometheus rules")
       }
     }
   }
 
-  Deployment_Node(gcp_cloud, "Google Cloud Platform", "us-central1 (or preferred region)") {
+  Deployment_Node(cloud_infra, "Cloud Provider", "region-specific — whatever the underlying provider offers for this run") {
 
-    Deployment_Node(gcp_ocp, "OpenShift 4.21+ Self-Managed", "3× control plane GCE  |  0–8× worker GCE (elastic)  |  Default storage class: GCP PD (standard/ssd)") {
+    Deployment_Node(cloud_ocp, "OpenShift 4.21+ Self-Managed", "3× control plane nodes  |  0–8× worker nodes (elastic)  |  Default storage class of the provider") {
 
-      Deployment_Node(ns_infra_gcp, "Namespace: banking-infra") {
-        Container(kafka_gcp_d, "Streams for Apache Kafka — Replica", "KRaft mode  |  3 controller pods (5Gi PVC)  |  3 broker pods (20Gi PVC)  |  Default SC: GCP PD  |  Receives MM2 replication from AWS")
-        Container(pg_gcp_d, "PostgreSQL Standby", "1 standby pod  |  PgBouncer sidecar  |  PVC: GCP PD default SC  |  Streaming replica from AWS primary")
-        Container(skupper_gcp_d, "RHSI Router", "1 pod  |  Consumes link token from AWS  |  Tunnels to AWS: kafka:9092, pg:5432")
+      Deployment_Node(ns_infra_cloud, "Namespace: banking-infra") {
+        Container(kafka_cloud_d, "Streams for Apache Kafka — Replica", "KRaft mode  |  3 controller pods (5Gi PVC)  |  3 broker pods (20Gi PVC)  |  Default storage class  |  Receives MM2 replication from On-Prem")
+        Container(pg_cloud_d, "PostgreSQL Standby", "1 standby pod  |  PgBouncer sidecar  |  PVC: default storage class  |  Streaming replica from On-Prem primary")
+        Container(skupper_cloud_d, "RHSI Router", "1 pod  |  Consumes link token from On-Prem  |  Tunnels to On-Prem: kafka:9092, pg:5432")
       }
 
-      Deployment_Node(ns_demo_gcp, "Namespace: banking-demo") {
-        Container(gen_gcp_d, "transaction-generator", "1 pod  |  ConfigMap: TPS=200 (split with AWS)")
-        Container(proc_gcp_d, "transaction-processor", "0–20 pods  |  KEDA: scales on Kafka consumer lag  |  Writes to AWS PostgreSQL via RHSI")
-        Container(acct_gcp_d, "account-service", "0–5 pods  |  HPA: CPU 60%")
-        Container(ledger_gcp_d, "ledger-service", "1 pod  |  Read-only from local PostgreSQL standby")
+      Deployment_Node(ns_demo_cloud, "Namespace: banking-demo") {
+        Container(gen_cloud_d, "transaction-generator", "1 pod  |  ConfigMap: TPS=200 (split with On-Prem)")
+        Container(proc_cloud_d, "transaction-processor", "0–20 pods  |  KEDA: scales on Kafka consumer lag  |  Writes to On-Prem PostgreSQL via RHSI")
+        Container(acct_cloud_d, "account-service", "1–5 pods  |  HPA: CPU 60%")
+        Container(ledger_cloud_d, "ledger-service", "1 pod  |  Read-only from local PostgreSQL standby")
       }
 
-      Deployment_Node(ns_platform_gcp, "Platform Namespaces") {
-        Container(ossm_gcp_d, "OSSM Control Plane", "istio-system NS  |  SMCP + SMMR")
-        Container(keda_gcp_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects: proc 0→20 on lag")
-        Container(rhacs_sensor, "RHACS Sensor", "stackrox NS  |  Reports to AWS RHACS Central")
-        Container(monitoring_gcp, "Observability Stack", "banking-monitoring NS  |  Jaeger + Prometheus  |  Federated to AWS Grafana via RHACM")
+      Deployment_Node(ns_platform_cloud, "Platform Namespaces") {
+        Container(ossm_cloud_d, "OSSM Control Plane", "istio-system NS  |  SMCP + SMMR")
+        Container(keda_cloud_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects: proc 0→20 on lag")
+        Container(rhacs_sensor, "RHACS Sensor", "stackrox NS  |  Reports to On-Prem RHACS Central")
+        Container(monitoring_cloud, "Observability Stack", "banking-monitoring NS  |  Jaeger + Prometheus  |  Federated to On-Prem Grafana via RHACM")
       }
     }
   }
@@ -200,17 +200,17 @@ C4Deployment
     Container(git_d, "Git Repository", "Argo CD source of truth  |  Webhook triggers sync on push")
   }
 
-  Rel(skupper_aws_d, skupper_gcp_d, "mTLS router link  |  AMQP over HTTPS", "Public LB endpoints")
-  Rel(mm2_d, kafka_gcp_d, "Replicates topics", "Via RHSI virtual service → kafka-bootstrap GCP")
-  Rel(proc_gcp_d, pg_aws_d, "Writes committed transactions", "JDBC → RHSI → AWS PgBouncer → PostgreSQL primary")
-  Rel(rhacm_d, gcp_ocp, "Manages spoke cluster", "HTTPS — klusterlet")
-  Rel(argocd_d, ns_demo_aws, "Deploys onprem overlay", "oc — Kustomize")
-  Rel(argocd_d, ns_demo_gcp, "Deploys cloud overlay", "oc — Kustomize")
+  Rel(skupper_onprem_d, skupper_cloud_d, "mTLS router link  |  AMQP over HTTPS", "Public LB endpoints")
+  Rel(mm2_d, kafka_cloud_d, "Replicates topics", "Via RHSI virtual service → kafka-bootstrap Cloud")
+  Rel(proc_cloud_d, pg_onprem_d, "Writes committed transactions", "JDBC → RHSI → On-Prem PgBouncer → PostgreSQL primary")
+  Rel(rhacm_d, cloud_ocp, "Manages spoke cluster", "HTTPS — klusterlet")
+  Rel(argocd_d, ns_demo_onprem, "Deploys onprem overlay", "oc — Kustomize")
+  Rel(argocd_d, ns_demo_cloud, "Deploys cloud overlay", "oc — Kustomize")
   Rel(argocd_d, git_d, "Watches repo", "git poll / webhook")
-  Rel(aws_ocp, quay_d, "Pulls images", "HTTPS")
-  Rel(gcp_ocp, quay_d, "Pulls images", "HTTPS")
+  Rel(onprem_ocp, quay_d, "Pulls images", "HTTPS")
+  Rel(cloud_ocp, quay_d, "Pulls images", "HTTPS")
   Rel(rhacs_sensor, rhacs_d, "Reports policy status", "gRPC mTLS")
-  Rel(monitoring_gcp, monitoring_aws, "Federated metrics", "RHACM Observability Add-on")
+  Rel(monitoring_cloud, monitoring_onprem, "Federated metrics", "RHACM Observability Add-on")
 ```
 
 ---
@@ -223,66 +223,66 @@ Shows the exact path of a single transaction from generation to dashboard, inclu
 sequenceDiagram
   autonumber
 
-  box AWS Cluster (On-Prem Sim)
-    participant Gen_AWS  as transaction-generator
-    participant Kafka_AWS as Kafka (AWS)
+  box On-Prem Cluster
+    participant Gen_Onprem  as transaction-generator
+    participant Kafka_Onprem as Kafka (On-Prem)
     participant MM2      as MirrorMaker 2
-    participant Proc_AWS as transaction-processor
-    participant Acct_AWS as account-service
-    participant PG_AWS   as PostgreSQL Primary
-    participant Ledger_AWS as ledger-service
+    participant Proc_Onprem as transaction-processor
+    participant Acct_Onprem as account-service
+    participant PG_Onprem   as PostgreSQL Primary
+    participant Ledger_Onprem as ledger-service
   end
 
   box RHSI Cross-Cluster Link
     participant Skupper  as RHSI Router Mesh
   end
 
-  box GCP Cluster (Cloud Burst)
-    participant Kafka_GCP as Kafka (GCP)
-    participant Proc_GCP as transaction-processor
-    participant Acct_GCP as account-service
-    participant Ledger_GCP as ledger-service
+  box Cloud Cluster
+    participant Kafka_Cloud as Kafka (Cloud)
+    participant Proc_Cloud as transaction-processor
+    participant Acct_Cloud as account-service
+    participant Ledger_Cloud as ledger-service
   end
 
   participant DashBE   as dashboard-backend
   participant DashFE   as dashboard-frontend (browser)
 
-  Note over Gen_AWS,Kafka_AWS: Normal path — transaction originates on AWS
+  Note over Gen_Onprem,Kafka_Onprem: Normal path — transaction originates on-prem
 
-  Gen_AWS->>Kafka_AWS: Publish TransactionEvent (Avro, acks=all)
-  Kafka_AWS-->>Gen_AWS: ACK (min.insync.replicas=2 satisfied)
+  Gen_Onprem->>Kafka_Onprem: Publish TransactionEvent (Avro, acks=all)
+  Kafka_Onprem-->>Gen_Onprem: ACK (min.insync.replicas=2 satisfied)
 
   par MirrorMaker 2 replication
-    MM2->>Kafka_AWS: Consume transactions-raw
-    MM2->>Skupper: Forward to GCP Kafka virtual service
-    Skupper->>Kafka_GCP: Write replicated topic
-  and AWS processor consumes
-    Proc_AWS->>Kafka_AWS: Consume transactions-raw
-    Proc_AWS->>Acct_AWS: GET /accounts/{id}/balance
-    Acct_AWS-->>Proc_AWS: Balance (@CacheResult)
-    Proc_AWS->>PG_AWS: INSERT INTO transactions (JDBC)
-    PG_AWS-->>Proc_AWS: Commit OK
-    Proc_AWS->>Kafka_AWS: Publish TransactionCommitted
+    MM2->>Kafka_Onprem: Consume transactions-raw
+    MM2->>Skupper: Forward to Cloud Kafka virtual service
+    Skupper->>Kafka_Cloud: Write replicated topic
+  and On-Prem processor consumes
+    Proc_Onprem->>Kafka_Onprem: Consume transactions-raw
+    Proc_Onprem->>Acct_Onprem: GET /accounts/{id}/balance
+    Acct_Onprem-->>Proc_Onprem: Balance (@CacheResult)
+    Proc_Onprem->>PG_Onprem: INSERT INTO transactions (JDBC)
+    PG_Onprem-->>Proc_Onprem: Commit OK
+    Proc_Onprem->>Kafka_Onprem: Publish TransactionCommitted
   end
 
-  Note over Proc_GCP,Skupper: Burst path — GCP processor writes back to AWS primary
+  Note over Proc_Cloud,Skupper: Burst path — Cloud processor writes back to On-Prem primary
 
-  Proc_GCP->>Kafka_GCP: Consume replicated transactions-raw
-  Proc_GCP->>Acct_GCP: GET /accounts/{id}/balance
-  Acct_GCP-->>Proc_GCP: Balance (@CacheResult)
-  Proc_GCP->>Skupper: JDBC → postgresql-primary virtual service
-  Skupper->>PG_AWS: INSERT INTO transactions (tunnelled JDBC)
-  PG_AWS-->>Proc_GCP: Commit OK (via RHSI)
-  Proc_GCP->>Kafka_GCP: Publish TransactionCommitted
+  Proc_Cloud->>Kafka_Cloud: Consume replicated transactions-raw
+  Proc_Cloud->>Acct_Cloud: GET /accounts/{id}/balance
+  Acct_Cloud-->>Proc_Cloud: Balance (@CacheResult)
+  Proc_Cloud->>Skupper: JDBC → postgresql-primary virtual service
+  Skupper->>PG_Onprem: INSERT INTO transactions (tunnelled JDBC)
+  PG_Onprem-->>Proc_Cloud: Commit OK (via RHSI)
+  Proc_Cloud->>Kafka_Cloud: Publish TransactionCommitted
 
-  Note over Ledger_AWS,DashFE: Ledger update and dashboard push
+  Note over Ledger_Onprem,DashFE: Ledger update and dashboard push
 
-  Ledger_AWS->>Kafka_AWS: Consume TransactionCommitted
-  Ledger_AWS->>PG_AWS: UPDATE running_balance
+  Ledger_Onprem->>Kafka_Onprem: Consume TransactionCommitted
+  Ledger_Onprem->>PG_Onprem: UPDATE running_balance
 
-  DashBE->>Ledger_AWS: Poll GET /ledger/recent (every 500ms)
-  DashBE->>Ledger_GCP: Poll GET /ledger/recent (every 500ms)
-  DashBE->>Kafka_AWS: Poll consumer group lag (Kafka Admin API)
+  DashBE->>Ledger_Onprem: Poll GET /ledger/recent (every 500ms)
+  DashBE->>Ledger_Cloud: Poll GET /ledger/recent (every 500ms)
+  DashBE->>Kafka_Onprem: Poll consumer group lag (Kafka Admin API)
   DashBE->>DashFE: Push MetricsPayload (WebSocket)
   DashFE-->>DashFE: Update TPS gauge, tx feed, replica count
 ```
@@ -300,19 +300,19 @@ sequenceDiagram
   participant Ops       as Platform Engineer (Dashboard)
   participant ChaosScript as chaos/network-partition.sh
 
-  box AWS Cluster
-    participant Kafka_AWS as Kafka (AWS) — PRIMARY
-    participant Proc_AWS  as transaction-processor (AWS)
-    participant PG_AWS    as PostgreSQL Primary
+  box On-Prem Cluster
+    participant Kafka_Onprem as Kafka (On-Prem) — PRIMARY
+    participant Proc_Onprem  as transaction-processor (On-Prem)
+    participant PG_Onprem    as PostgreSQL Primary
   end
 
   box RHSI
     participant Skupper   as RHSI Router Link
   end
 
-  box GCP Cluster
-    participant Kafka_GCP as Kafka (GCP) — REPLICA
-    participant Proc_GCP  as transaction-processor (GCP)
+  box Cloud Cluster
+    participant Kafka_Cloud as Kafka (Cloud) — REPLICA
+    participant Proc_Cloud  as transaction-processor (Cloud)
     participant MM2       as MirrorMaker 2
   end
 
@@ -321,38 +321,38 @@ sequenceDiagram
   Note over Ops,DashFE: T=0 — Normal operation, both clusters processing
 
   Ops->>ChaosScript: Click "Network Partition" button
-  ChaosScript->>Skupper: Delete skupper-link Secret on GCP
+  ChaosScript->>Skupper: Delete skupper-link Secret on Cloud
 
   Note over Skupper: Link severs within ~5 seconds
 
   Skupper-->>DashFE: RHSI panel shows link DOWN (amber)
-  Skupper-->>MM2: MM2 loses connection to GCP Kafka virtual service
-  Note over MM2: MM2 pauses replication — buffers in AWS Kafka
+  Skupper-->>MM2: MM2 loses connection to Cloud Kafka virtual service
+  Note over MM2: MM2 pauses replication — buffers in On-Prem Kafka
 
-  Proc_GCP->>Kafka_GCP: Continues consuming already-replicated events
-  Proc_GCP->>Skupper: Attempt JDBC to postgresql-primary virtual service
-  Skupper-->>Proc_GCP: Connection refused — link down
+  Proc_Cloud->>Kafka_Cloud: Continues consuming already-replicated events
+  Proc_Cloud->>Skupper: Attempt JDBC to postgresql-primary virtual service
+  Skupper-->>Proc_Cloud: Connection refused — link down
 
-  Note over Proc_GCP: CIRCUIT BREAKER opens — GCP processor pauses writes
-  Note over Proc_GCP: Events remain in Kafka GCP — no data loss
+  Note over Proc_Cloud: CIRCUIT BREAKER opens — Cloud processor pauses writes
+  Note over Proc_Cloud: Events remain in Kafka Cloud — no data loss
 
-  Proc_AWS->>Kafka_AWS: Continues consuming — unaffected
-  Proc_AWS->>PG_AWS: Writes continue normally
-  Note over Proc_AWS: AWS processes 100% of committed transactions
+  Proc_Onprem->>Kafka_Onprem: Continues consuming — unaffected
+  Proc_Onprem->>PG_Onprem: Writes continue normally
+  Note over Proc_Onprem: On-Prem processes 100% of committed transactions
 
-  DashFE-->>DashFE: GCP cluster node goes amber
-  DashFE-->>DashFE: Global counter continues incrementing (AWS only)
-  DashFE-->>DashFE: GCP Kafka lag starts rising
+  DashFE-->>DashFE: Cloud cluster node goes amber
+  DashFE-->>DashFE: Global counter continues incrementing (On-Prem only)
+  DashFE-->>DashFE: Cloud Kafka lag starts rising
 
   Note over Ops,DashFE: T=60s — Auto-recovery triggered
 
-  ChaosScript->>Skupper: Re-apply skupper-link token Secret on GCP
+  ChaosScript->>Skupper: Re-apply skupper-link token Secret on Cloud
   Skupper-->>DashFE: Link re-established — panel goes green
-  MM2->>Kafka_GCP: Replication resumes — lag drains
-  Proc_GCP->>Skupper: JDBC reconnects to postgresql-primary
-  Proc_GCP->>PG_AWS: Processes backlogged events
-  Note over PG_AWS: All buffered transactions committed — no data lost
-  DashFE-->>DashFE: GCP node returns green, lag chart drains to zero
+  MM2->>Kafka_Cloud: Replication resumes — lag drains
+  Proc_Cloud->>Skupper: JDBC reconnects to postgresql-primary
+  Proc_Cloud->>PG_Onprem: Processes backlogged events
+  Note over PG_Onprem: All buffered transactions committed — no data lost
+  DashFE-->>DashFE: Cloud node returns green, lag chart drains to zero
 ```
 
 ---
@@ -384,6 +384,7 @@ default SC is configured on the cluster at deploy time.
 
 ### Self-Managed OCP Note
 Neither cluster uses a managed service (no ROSA, no OSD).
-Both are self-managed OpenShift 4.21+ installs on EC2 (AWS) and GCE (GCP).
+Both are self-managed OpenShift 4.21+ installs on whatever compute the provider of
+the given test run offers (e.g. EC2, GCE, bare metal, vSphere).
 The bootstrap script must handle full OCP install prerequisites including
 pull-secret configuration and DNS setup for *.apps.<cluster-domain>.

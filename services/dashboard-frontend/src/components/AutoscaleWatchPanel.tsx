@@ -8,7 +8,7 @@ interface Props {
   payload: MetricsPayload | null;
 }
 
-import { AWS_COLOR, GCP_COLOR, DARK_AXIS } from '../colors';
+import { ONPREM_COLOR, CLOUD_COLOR, DARK_AXIS } from '../colors';
 
 const SCALER_CONFIG = {
   processor: {
@@ -26,7 +26,7 @@ const SCALER_CONFIG = {
     title: 'account-service',
     description: 'Scales when average CPU exceeds 60%. Responds to rising request rate as more processors call the balance API.',
     trigger: 'CPU utilisation target: 60%',
-    onpremMin: 2, onpremMax: 10,
+    onpremMin: 1, onpremMax: 10,
     cloudMin: 1,  cloudMax: 5,
   },
 };
@@ -94,8 +94,8 @@ function ScalerBreakdownCard() {
           Trigger: <span style={{ color: processor.labelColor }}>{processor.trigger}</span>
         </div>
         <div style={{ background: '#151515', borderRadius: 6, padding: '8px 10px' }}>
-          {row('AWS (on-prem)', processor.onpremMin, processor.onpremMax, AWS_COLOR)}
-          {row('GCP (cloud burst)', processor.cloudMin, processor.cloudMax, GCP_COLOR)}
+          {row('On-Prem', processor.onpremMin, processor.onpremMax, ONPREM_COLOR)}
+          {row('Cloud', processor.cloudMin, processor.cloudMax, CLOUD_COLOR)}
         </div>
       </div>
 
@@ -112,20 +112,20 @@ function ScalerBreakdownCard() {
           Trigger: <span style={{ color: account.labelColor }}>{account.trigger}</span>
         </div>
         <div style={{ background: '#151515', borderRadius: 6, padding: '8px 10px' }}>
-          {row('AWS (on-prem)', account.onpremMin, account.onpremMax, AWS_COLOR)}
-          {row('GCP (cloud burst)', account.cloudMin, account.cloudMax, GCP_COLOR)}
+          {row('On-Prem', account.onpremMin, account.onpremMax, ONPREM_COLOR)}
+          {row('Cloud', account.cloudMin, account.cloudMax, CLOUD_COLOR)}
         </div>
       </div>
     </div>
   );
 }
 
-function ReplicaChart({ history, title, subtitle, awsKey, gcpKey, minRef, maxRef }: {
+function ReplicaChart({ history, title, subtitle, onpremKey, cloudKey, minRef, maxRef }: {
   history: AutoscalePoint[];
   title: string;
   subtitle: string;
-  awsKey: keyof AutoscalePoint;
-  gcpKey: keyof AutoscalePoint;
+  onpremKey: keyof AutoscalePoint;
+  cloudKey: keyof AutoscalePoint;
   minRef: number;
   maxRef: number;
 }) {
@@ -141,17 +141,17 @@ function ReplicaChart({ history, title, subtitle, awsKey, gcpKey, minRef, maxRef
   }, []);
 
   // Filter out -1 (unknown) points — show as gap
-  const awsData = history
-    .filter(p => (p[awsKey] as number) >= 0)
-    .map(p => ({ x: p.ts, y: p[awsKey] as number, name: 'AWS (on-prem)' }));
-  const gcpData = history
-    .filter(p => (p[gcpKey] as number) >= 0)
-    .map(p => ({ x: p.ts, y: p[gcpKey] as number, name: 'GCP (cloud)' }));
+  const onpremData = history
+    .filter(p => (p[onpremKey] as number) >= 0)
+    .map(p => ({ x: p.ts, y: p[onpremKey] as number, name: 'On-Prem' }));
+  const cloudData = history
+    .filter(p => (p[cloudKey] as number) >= 0)
+    .map(p => ({ x: p.ts, y: p[cloudKey] as number, name: 'Cloud' }));
 
   const maxY = history.length > 0
     ? Math.max(maxRef, ...history.map(p => Math.max(
-        (p[awsKey] as number) >= 0 ? p[awsKey] as number : 0,
-        (p[gcpKey] as number) >= 0 ? p[gcpKey] as number : 0,
+        (p[onpremKey] as number) >= 0 ? p[onpremKey] as number : 0,
+        (p[cloudKey] as number) >= 0 ? p[cloudKey] as number : 0,
       )))
     : maxRef;
 
@@ -160,8 +160,8 @@ function ReplicaChart({ history, title, subtitle, awsKey, gcpKey, minRef, maxRef
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 12px 2px' }}>
         <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 13 }}>{title}</span>
         <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
-          <span style={{ color: AWS_COLOR }}>— AWS (on-prem)</span>
-          <span style={{ color: GCP_COLOR }}>— GCP (cloud burst)</span>
+          <span style={{ color: ONPREM_COLOR }}>— On-Prem</span>
+          <span style={{ color: CLOUD_COLOR }}>— Cloud</span>
         </div>
       </div>
       <div style={{ padding: '0 12px 8px', fontSize: 11, color: '#6a6e73' }}>{subtitle}</div>
@@ -193,16 +193,16 @@ function ReplicaChart({ history, title, subtitle, awsKey, gcpKey, minRef, maxRef
             />
             <ChartAxis dependentAxis tickFormat={(t: number) => `${Math.round(t)}`} style={DARK_AXIS} />
             <ChartGroup>
-              {awsData.length > 0 && (
+              {onpremData.length > 0 && (
                 <ChartLine
-                  data={awsData}
-                  style={{ data: { stroke: AWS_COLOR, strokeWidth: 2 } }}
+                  data={onpremData}
+                  style={{ data: { stroke: ONPREM_COLOR, strokeWidth: 2 } }}
                 />
               )}
-              {gcpData.length > 0 && (
+              {cloudData.length > 0 && (
                 <ChartLine
-                  data={gcpData}
-                  style={{ data: { stroke: GCP_COLOR, strokeWidth: 2 } }}
+                  data={cloudData}
+                  style={{ data: { stroke: CLOUD_COLOR, strokeWidth: 2 } }}
                 />
               )}
             </ChartGroup>
@@ -252,8 +252,8 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
           history={history}
           title="Transaction Processor Replicas"
           subtitle={`KEDA · Kafka lag threshold ${processor.trigger.split(': ')[1]}`}
-          awsKey="onpremProcessor"
-          gcpKey="cloudProcessor"
+          onpremKey="onpremProcessor"
+          cloudKey="cloudProcessor"
           minRef={0}
           maxRef={processor.cloudMax}
         />
@@ -261,8 +261,8 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
           history={history}
           title="Account Service Replicas"
           subtitle={`HPA · ${account.trigger}`}
-          awsKey="onpremAccount"
-          gcpKey="cloudAccount"
+          onpremKey="onpremAccount"
+          cloudKey="cloudAccount"
           minRef={account.cloudMin}
           maxRef={account.onpremMax}
         />
@@ -276,7 +276,7 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <ReplicaKpi
               label="transaction-processor"
-              clusterLabel="GCP (cloud burst)"
+              clusterLabel="Cloud"
               current={procCloud}
               min={processor.cloudMin}
               max={processor.cloudMax}
@@ -284,7 +284,7 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
             />
             <ReplicaKpi
               label="transaction-processor"
-              clusterLabel="AWS (on-prem)"
+              clusterLabel="On-Prem"
               current={procOnprem}
               min={processor.onpremMin}
               max={processor.onpremMax}
@@ -292,7 +292,7 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
             />
             <ReplicaKpi
               label="account-service"
-              clusterLabel="GCP (cloud burst)"
+              clusterLabel="Cloud"
               current={acctCloud}
               min={account.cloudMin}
               max={account.cloudMax}
@@ -300,7 +300,7 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
             />
             <ReplicaKpi
               label="account-service"
-              clusterLabel="AWS (on-prem)"
+              clusterLabel="On-Prem"
               current={acctOnprem}
               min={account.onpremMin}
               max={account.onpremMax}

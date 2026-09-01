@@ -1,6 +1,6 @@
 import React from 'react';
 import { MetricsPayload, ClusterMetrics, ONPREM_CAPACITY_TPS } from '../types/metrics';
-import { AWS_COLOR, GCP_COLOR } from '../colors';
+import { ONPREM_COLOR, CLOUD_COLOR } from '../colors';
 
 interface Props { payload: MetricsPayload | null; }
 
@@ -10,12 +10,12 @@ function fmt(n: number, decimals = 0) {
 
 function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
   const isOnprem = m.cluster === 'onprem';
-  const label    = isOnprem ? 'AWS (on-prem)' : 'GCP (cloud burst)';
-  const accent   = isOnprem ? AWS_COLOR : GCP_COLOR;
+  const label    = isOnprem ? 'On-Prem' : 'Cloud';
+  const accent   = isOnprem ? ONPREM_COLOR : CLOUD_COLOR;
   const healthColor = m.healthy ? '#92d400' : '#c9190b';
 
   const roleBadge = isOnprem
-    ? { text: 'Primary', color: AWS_COLOR }
+    ? { text: 'Primary', color: ONPREM_COLOR }
     : isBurst
       ? { text: 'Burst Active', color: '#f4c145' }
       : { text: 'Standby', color: '#6a6e73' };
