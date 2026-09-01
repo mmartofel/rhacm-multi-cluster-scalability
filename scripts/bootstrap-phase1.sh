@@ -306,7 +306,7 @@ wait_for_jsonpath "network observer (onprem)" 300 \
 ok "Network Observer ready"
 
 NETOBS_HOST=$(oc --context "${ONPREM}" get route skupper-network-observer \
-  -n "${INFRA_NS}" -o jsonpath='{.spec.host}' 2>/dev/null || true)
+  -n "${INFRA_NS}" -o jsonpath='{.status.ingress[0].host}' 2>/dev/null || true)
 if [[ -n "${NETOBS_HOST}" ]]; then
   info "Network console: https://${NETOBS_HOST} (login with OpenShift credentials)"
 fi

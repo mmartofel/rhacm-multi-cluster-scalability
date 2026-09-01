@@ -86,7 +86,11 @@ This runs the operator check, installs the RHACM `MultiClusterHub`, imports `clo
 
 This registers `cloud` with Argo CD, grants the Argo CD RBAC needed to sync `banking-infra`, applies the infra `ApplicationSet`s, waits for Kafka/PostgreSQL to come up, deploys the Skupper (RHSI) sites, exchanges the `AccessGrant`/`AccessToken`, wires up Connectors/Listeners, waits for MirrorMaker 2, deploys the RHSI Network Observer (network console UI, onprem-only — see below), and ends with a Phase 1 checkpoint.
 
-Once complete, the network console is reachable at the printed Route URL (login with your OpenShift credentials) and shows live topology/traffic across both linked sites.
+Once complete, the network console is reachable at the printed Route URL and shows live topology/traffic across both linked sites. Get the URL and log in with your OpenShift username/password (OAuth login — no separate credential to fetch):
+
+```bash
+oc --context onprem get route skupper-network-observer -n banking-infra -o jsonpath='https://{.status.ingress[0].host}{"\n"}'
+```
 
 No extra env vars are required beyond `KUBECONFIG` (auto-configured).
 
@@ -99,7 +103,15 @@ source quay.sh   # ensures QUAY_ORG, QUAY_USER, QUAY_TOKEN are set
 
 This builds all 7 service images via Tekton, applies the Skupper application-layer extensions, initializes the PostgreSQL schema, propagates DB credentials to both clusters, registers Avro schemas with Apicurio, grants Argo CD RBAC for `banking-demo`, applies the app `ApplicationSet`, waits for all pods, deploys RHACS Central (onprem) and registers cloud as a Sensor/`SecuredCluster` via an automated cluster-init bundle exchange, and ends with a Phase 2 checkpoint once everything is healthy.
 
-The RHACS console URL and a pointer to the auto-generated admin password (`central-htpasswd` secret) are printed at the end. Note: `central-db`'s default resource requests can be significant — on a resource-constrained cluster it may stay `Pending` until capacity frees up; this doesn't indicate a broken deployment.
+The RHACS console URL and a pointer to the auto-generated admin password (`central-htpasswd` secret) are printed at the end. Get the URL, username, and password:
+
+```bash
+oc --context onprem get route central -n stackrox -o jsonpath='https://{.spec.host}{"\n"}'
+echo "user: admin"
+echo "password: $(oc --context onprem get secret central-htpasswd -n stackrox -o jsonpath='{.data.password}' | base64 -d)"
+```
+
+This is local basic-auth login only (username `admin`) — RHACS is not configured with OpenShift OAuth as an auth provider. Note: `central-db`'s default resource requests can be significant — on a resource-constrained cluster it may stay `Pending` until capacity frees up; this doesn't indicate a broken deployment.
 
 > `scripts/build-push-images-local.sh` is a fallback that builds images locally with podman/docker instead of Tekton — prefer `bootstrap-phase2.sh` unless Tekton is unavailable.
 

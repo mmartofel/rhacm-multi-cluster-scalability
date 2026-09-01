@@ -166,6 +166,15 @@ The installed Red Hat Service Interconnect operator (`skupper-operator.v2.2.2-rh
 **`NetworkObserver` readiness — poll condition `Deployed`, not a custom status field:**
 This CRD only exposes the four standard `operator-sdk` Helm-operator conditions (`Initialized`, `Deployed`, `ReleaseFailed`, `Irreconcilable`) — `Deployed: True` (reason `InstallSuccessful`) is the terminal "done" signal and correlates directly with the Deployment becoming Ready; there is no separate `Available` condition on this CRD (contrast with `Central` below, which has both).
 
+**Getting the Network Observer console URL:**
+```bash
+oc --context onprem get route skupper-network-observer -n banking-infra -o jsonpath='https://{.status.ingress[0].host}{"\n"}'
+```
+Login is OpenShift OAuth (`auth.strategy: openshift` in `infra/skupper-netobs/network-observer.yaml`) — use your normal OpenShift username/password, there is no separate credential to fetch.
+
+**IMPORTANT — this Route uses `spec.subdomain`, not `spec.host`; the real hostname only lives under `.status.ingress[0].host`:**
+`infra/skupper-netobs/network-observer.yaml` sets `route.subdomain: network-observer` (not `route.host`), so OpenShift's router assigns and writes the actual hostname only after admitting the Route — `.spec.host` stays empty forever on a subdomain-based Route. `oc get route ... -o jsonpath='{.spec.host}'` silently returns an empty string (looks like success, prints `https://`). Always read `.status.ingress[0].host` instead. This bit `bootstrap-phase1.sh`'s own "Network console:" printout until fixed — confirmed live (`.spec.host` empty, `.status.ingress[0].host` correct). Central's Route (RHACS) is unaffected — it uses a plain generated `spec.host`, not a subdomain.
+
 ## Phase 2 Operational Notes
 
 Issues discovered during Phase 2 deployment that must be kept in mind for future work:
@@ -308,3 +317,11 @@ Unlike the Skupper `NetworkObserver` CRD (whose only "done" signal is `Deployed`
 
 **Central's default resource requests can exceed available capacity on constrained sandbox clusters:**
 On a cluster already running the full banking-demo stack plus RHACM/GitOps/other operators, `central-db`'s default resource request can fail to schedule (`FailedScheduling: Insufficient cpu`), leaving Central permanently non-`Available` even though the CR/Route/secrets are all correctly created. This is a capacity-planning issue, not an automation bug — if `central-db` stays `Pending`, check `oc describe pod -n stackrox -l app=central-db` for `FailedScheduling` before assuming the RHACS wiring itself is broken; either free up worker capacity or reduce `spec.central.resources`/`spec.scanner` sizing.
+
+**Getting the RHACS console URL, username, and password:**
+```bash
+oc --context onprem get route central -n stackrox -o jsonpath='https://{.spec.host}{"\n"}'
+echo "user: admin"
+echo "password: $(oc --context onprem get secret central-htpasswd -n stackrox -o jsonpath='{.data.password}' | base64 -d)"
+```
+Local basic-auth login only (username `admin`) — `infra/rhacs/central.yaml` does not configure OpenShift OAuth as an auth provider, unlike the Network Observer console above.
