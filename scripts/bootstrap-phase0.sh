@@ -113,6 +113,12 @@ wait_for "openshift-gitops-server" 600 \
     -n openshift-gitops --timeout=10s
 ok "ArgoCD (openshift-gitops-server) ready"
 
+# Merge-patch controller sizing/exclusions onto the operator's default ArgoCD
+# instance — bare defaults (2Gi controller memory limit, no Event exclusion)
+# OOM the application-controller on a RHACM-hub-sized cluster.
+oc --context "${ONPREM}" apply -f "${REPO_ROOT}/infra/argocd/argocd-instance.yaml"
+ok "ArgoCD instance sizing/exclusions applied"
+
 log "Step f: Namespaces on both contexts"
 for ctx in "${ONPREM}" "${CLOUD}"; do
   for ns in "${NAMESPACES[@]}"; do

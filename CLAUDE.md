@@ -132,8 +132,13 @@ oc login https://api.<cluster-domain>:6443
 - Do not use kubectl, use `oc` CLI for all cluster interactions. Fix existing `kubectl` references in scripts and documentation.
 - Bootstrap scripts must handle full OCP install prerequisites: pull-secret configuration and DNS (`*.apps.<cluster-domain>`).
 - Storage classes are not pinned in manifests; PVCs use the cluster's default storage class at deploy time, whatever that resolves to on the underlying provider (e.g. EBS on AWS, GCP PD on GCP, Managed Disk on Azure).
-- RHACS Central runs on onprem; cloud runs the Sensor only, reporting back to Central via gRPC mTLS.
+- RHACS Central runs on onprem; both onprem (self-monitoring) and cloud run a Sensor, each reporting back to Central via gRPC mTLS.
 - Observability: cloud metrics federate to onprem Grafana via RHACM Observability Add-on.
+
+## Phase 0 Operational Notes
+
+**OpenShift GitOps operator's default `ArgoCD` CR OOMs the application-controller on this RHACM-hub cluster — apply `infra/argocd/argocd-instance.yaml`:**
+The `openshift-gitops-operator` auto-creates a default `ArgoCD` instance (name: `openshift-gitops`) with a `2Gi` controller memory limit and a `resource.exclusions` list that does **not** exclude `Event`/`events.k8s.io Event` objects. On a RHACM Hub cluster (401 CRDs from RHACM, RHACS, Tekton, cert-manager, KEDA, Strimzi, Crunchy PGO, Skupper, etc.) with two registered clusters (onprem in-cluster + `cloud` via an external `cluster-secret`), the application-controller's watch cache ends up holding every Event across both clusters for no diffing benefit — Events are high-churn and Argo CD Applications never target them — and it gets `OOMKilled` (confirmed live: `lastState.terminated.reason: OOMKilled`, exit 137, repeated `CrashLoopBackOff`). `infra/argocd/argocd-instance.yaml` fixes this as a **merge-patch** (only `spec.controller.resources`, `spec.controller.processors`, and `spec.resourceExclusions` are set — the operator keeps owning everything else): raises the memory limit to `4Gi` (node headroom is ~30Gi/node, so this is safe), caps reconciliation parallelism (`processors.status: 10` / `operation: 5`, defaults are ~20/~10) so a post-restart full-fleet sync storm can't spike memory as hard, and adds the missing `Event` exclusion on top of the operator's existing default exclusions (which are preserved verbatim in the same field, not replaced). Applied by `bootstrap-phase0.sh` right after the `openshift-gitops-server` readiness wait.
 
 ## Phase 1 Operational Notes
 
