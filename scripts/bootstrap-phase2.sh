@@ -352,6 +352,14 @@ CENTRAL_PASSWORD=$(oc get secret central-htpasswd -n stackrox --context onprem \
   -o jsonpath='{.data.password}' | base64 -d)
 ok "Central Route: https://$CENTRAL_HOST (admin password in central-htpasswd secret)"
 
+# The stackrox namespace must exist on cloud before the init-bundle secrets
+# are applied into it — otherwise `oc apply` fails with "namespaces \"stackrox\"
+# not found" and SecuredCluster later reports Irreconcilable ("some init-bundle
+# secrets missing").
+oc create namespace stackrox --context cloud --dry-run=client -o yaml \
+  | oc apply -f - --context cloud
+ok "stackrox namespace ensured on cloud"
+
 # Generate a cluster-init bundle for cloud's Sensor (idempotent: skip if the
 # bundle secrets already exist on cloud from a previous run). The kubectlBundle
 # creates sensor-tls, collector-tls, and admission-control-tls secrets.
