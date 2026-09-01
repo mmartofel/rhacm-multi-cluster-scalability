@@ -17,8 +17,8 @@ const SCALER_CONFIG = {
     title: 'transaction-processor',
     description: 'Scales on transactions-raw consumer lag. When lag exceeds 100 messages KEDA adds replicas.',
     trigger: 'Kafka lag threshold: 100 messages',
-    onpremMin: 1, onpremMax: 10,
-    cloudMin: 0,  cloudMax: 20,
+    onpremMin: 1, onpremMax: 20,
+    cloudMin: 1,  cloudMax: 20,
   },
   account: {
     label: 'HPA',
@@ -26,8 +26,8 @@ const SCALER_CONFIG = {
     title: 'account-service',
     description: 'Scales when average CPU exceeds 60%. Responds to rising request rate as more processors call the balance API.',
     trigger: 'CPU utilisation target: 60%',
-    onpremMin: 1, onpremMax: 10,
-    cloudMin: 1,  cloudMax: 5,
+    onpremMin: 1, onpremMax: 20,
+    cloudMin: 1,  cloudMax: 20,
   },
 };
 

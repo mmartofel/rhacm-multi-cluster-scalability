@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **multi-cluster banking transaction demo platform** designed to demonstrate high availability, elasticity, data consistency, and zero-downtime upgrades across two OpenShift 4.21+ clusters:
 
 - **`onprem`:** Self-managed OCP. Static baseline capacity. Record-of-truth cluster (PostgreSQL primary, Kafka source, RHACM Hub, Argo CD).
-- **`cloud`:** Self-managed OCP. Elastic capacity — scales to zero when idle. KEDA-driven autoscaling (0–20 replicas on Kafka consumer lag).
+- **`cloud`:** Self-managed OCP. Elastic capacity. KEDA-driven autoscaling (1–20 replicas on Kafka consumer lag).
 
 `onprem` and `cloud` are **logical roles, not infrastructure**. Either cluster can run on any provider or on bare metal — AWS, GCP, Azure, vSphere, whatever is available for a given test run. Nothing in the manifests, scripts, or app config is tied to a specific cloud; only the two context names (`onprem`, `cloud`) and their roles (hub/record-of-truth vs. elastic spoke) matter. Do not assume or hardcode a specific cloud provider anywhere in this repo.
 
@@ -21,7 +21,7 @@ Cross-cluster connectivity is provided by **Red Hat Service Interconnect (RHSI)*
 |---|---|---|
 | `transaction-generator` | Emits synthetic DEBIT/CREDIT `TransactionEvent`s to Kafka at configurable TPS | JVM mode; ConfigMap-driven TPS |
 | `transaction-processor` | Consumes Kafka, validates balance, writes to PostgreSQL, emits `TransactionCommitted`; failed transactions emitted to DLQ | JVM mode + KEDA; cloud instance writes to onprem PostgreSQL via RHSI; `OWNED_PARTITIONS` env var restricts consumption to cluster-specific partitions (onprem: 0,1,2 · cloud: 3,4,5) |
-| `account-service` | Balance reads via Quarkus `@CacheResult` in-process cache; reads PostgreSQL directly | onprem: HPA CPU 60%; cloud: 0–5 replicas |
+| `account-service` | Balance reads via Quarkus `@CacheResult` in-process cache; reads PostgreSQL directly | HPA CPU 60%, 1–20 replicas (both clusters) |
 | `ledger-service` | Authoritative running balance; serves REST to dashboard-backend | cloud instance reads from onprem PostgreSQL via RHSI (`postgresql-primary`) |
 | `cluster-gateway` | Traffic weight control; aggregated `/health` and `/metrics` | Manages Istio VirtualService weights |
 | `dashboard-backend` | Polls both clusters every 500ms, aggregates, streams `MetricsPayload` via WebSocket | Quarkus WebSocket |

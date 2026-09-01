@@ -7,7 +7,7 @@ spec:
   scaleTargetRef:
     name: transaction-processor
   minReplicaCount: 1
-  maxReplicaCount: 10
+  maxReplicaCount: 20
   cooldownPeriod: 60
   triggers:
   - type: kafka

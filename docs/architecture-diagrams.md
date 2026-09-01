@@ -71,15 +71,15 @@ C4Container
   Boundary(cloud_cluster, "Cluster 2 — Cloud  |  OpenShift 4.21+  |  Namespace: banking-demo / banking-infra") {
 
     Container(gen_cloud, "transaction-generator", "Quarkus 3 / JVM", "Emits events to local Kafka replica. TPS split configurable via ConfigMap.")
-    Container(proc_cloud, "transaction-processor", "Quarkus 3 Native + KEDA", "Consumes local Kafka replica. Writes to On-Prem PostgreSQL via RHSI. Scales 0–20.")
-    Container(acct_cloud, "account-service", "Quarkus 3 REST", "@CacheResult in-process cache. 0–5 replicas via HPA.")
+    Container(proc_cloud, "transaction-processor", "Quarkus 3 Native + KEDA", "Consumes local Kafka replica. Writes to On-Prem PostgreSQL via RHSI. Scales 1–20.")
+    Container(acct_cloud, "account-service", "Quarkus 3 REST", "@CacheResult in-process cache. 1–20 replicas via HPA.")
     Container(ledger_cloud, "ledger-service", "Quarkus 3 REST", "Read-only from PostgreSQL standby. Serves Cloud-local latency reads.")
 
     ContainerDb(kafka_cloud, "Streams for Apache Kafka", "Kafka 4.2.0 — KRaft mode (3 controllers + 3 brokers)", "Receives replicated topics from On-Prem via MirrorMaker 2.")
     ContainerDb(pg_cloud, "PostgreSQL Standby", "Crunchy Postgres for Kubernetes v5", "Streaming replica from On-Prem primary. Read-only. Default-storage-class PVC.")
     Container(skupper_cloud, "RHSI Router", "Red Hat Service Interconnect 2", "Consumes link token from On-Prem. Provides virtual services: kafka-bootstrap, postgresql-primary.")
     Container(ossm_cloud, "Service Mesh CP", "OpenShift Service Mesh 2 (Istio)", "mTLS, traffic splitting, circuit breaker for Cloud workloads.")
-    Container(keda_cloud, "Custom Metrics Autoscaler", "CMA v2.18 (KEDA 2.x)", "Scales transaction-processor on Kafka consumer group lag. 0→20 replicas.")
+    Container(keda_cloud, "Custom Metrics Autoscaler", "CMA v2.18 (KEDA 2.x)", "Scales transaction-processor on Kafka consumer group lag. 1→20 replicas.")
   }
 
   Boundary(shared_infra, "Shared External Services") {
@@ -150,8 +150,8 @@ C4Deployment
 
       Deployment_Node(ns_demo_onprem, "Namespace: banking-demo") {
         Container(gen_onprem_d, "transaction-generator", "1 pod  |  ConfigMap: TPS=200")
-        Container(proc_onprem_d, "transaction-processor", "1–10 pods  |  KEDA: lag threshold 100")
-        Container(acct_onprem_d, "account-service", "1 pod  |  HPA: CPU 60%")
+        Container(proc_onprem_d, "transaction-processor", "1–20 pods  |  KEDA: lag threshold 100")
+        Container(acct_onprem_d, "account-service", "1–20 pods  |  HPA: CPU 60%")
         Container(ledger_onprem_d, "ledger-service", "2 pods")
         Container(gateway_d, "cluster-gateway", "2 pods  |  Manages Istio VS weights")
         Container(dash_be_d, "dashboard-backend", "2 pods  |  WebSocket /ws/metrics")
@@ -181,14 +181,14 @@ C4Deployment
 
       Deployment_Node(ns_demo_cloud, "Namespace: banking-demo") {
         Container(gen_cloud_d, "transaction-generator", "1 pod  |  ConfigMap: TPS=200 (split with On-Prem)")
-        Container(proc_cloud_d, "transaction-processor", "0–20 pods  |  KEDA: scales on Kafka consumer lag  |  Writes to On-Prem PostgreSQL via RHSI")
-        Container(acct_cloud_d, "account-service", "1–5 pods  |  HPA: CPU 60%")
+        Container(proc_cloud_d, "transaction-processor", "1–20 pods  |  KEDA: scales on Kafka consumer lag  |  Writes to On-Prem PostgreSQL via RHSI")
+        Container(acct_cloud_d, "account-service", "1–20 pods  |  HPA: CPU 60%")
         Container(ledger_cloud_d, "ledger-service", "1 pod  |  Read-only from local PostgreSQL standby")
       }
 
       Deployment_Node(ns_platform_cloud, "Platform Namespaces") {
         Container(ossm_cloud_d, "OSSM Control Plane", "istio-system NS  |  SMCP + SMMR")
-        Container(keda_cloud_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects: proc 0→20 on lag")
+        Container(keda_cloud_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects: proc 1→20 on lag")
         Container(rhacs_sensor, "RHACS Sensor", "stackrox NS  |  Reports to On-Prem RHACS Central")
         Container(monitoring_cloud, "Observability Stack", "banking-monitoring NS  |  Jaeger + Prometheus  |  Federated to On-Prem Grafana via RHACM")
       }

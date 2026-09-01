@@ -46,7 +46,7 @@ function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
             </span>
           </div>
           <div style={{ fontSize: 11, color: '#8a8d90', marginTop: 2 }}>
-            {isOnprem ? 'Record-of-truth · Primary DB · Kafka source' : 'Cloud burst · KEDA 0–20 replicas'}
+            {isOnprem ? 'Record-of-truth · Primary DB · Kafka source' : 'Cloud burst · KEDA 1–20 replicas'}
           </div>
         </div>
         <span style={{ fontSize: 11, color: healthColor, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>

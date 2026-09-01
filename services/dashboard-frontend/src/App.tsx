@@ -142,7 +142,7 @@ export default function App() {
       case 'autoscale':
         return <AutoscaleWatchPanel history={autoscaleHistory.current} payload={payload} />;
       case 'about':
-        return <Placeholder title="Banking Demo — Multi-Cluster Scalability" body={'On-Prem  ·  Cloud  ·  Red Hat Service Interconnect mTLS\n\nKafka 4.2 (KRaft)  ·  PostgreSQL HA  ·  KEDA autoscaling  ·  Argo CD GitOps  ·  RHACM 2.16\n\nTransactions generated on On-Prem → replicated to Cloud via MirrorMaker 2\nProcessors on both clusters write commits back to On-Prem PostgreSQL via RHSI\nKEDA scales cloud processors 0 → 20 replicas based on consumer lag'} />;
+        return <Placeholder title="Banking Demo — Multi-Cluster Scalability" body={'On-Prem  ·  Cloud  ·  Red Hat Service Interconnect mTLS\n\nKafka 4.2 (KRaft)  ·  PostgreSQL HA  ·  KEDA autoscaling  ·  Argo CD GitOps  ·  RHACM 2.16\n\nTransactions generated on On-Prem → replicated to Cloud via MirrorMaker 2\nProcessors on both clusters write commits back to On-Prem PostgreSQL via RHSI\nKEDA scales cloud processors 1 → 20 replicas based on consumer lag'} />;
       default:
         return null;
     }
