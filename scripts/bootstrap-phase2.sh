@@ -326,8 +326,8 @@ for dep in "${CLOUD_DEPLOYMENTS[@]}"; do
   wait_deployment "$dep" cloud || FAILED_DEPS+=("cloud/$dep")
 done
 
-# ─── RHACS Central (onprem) + SecuredCluster (cloud) ─────────────────────────
-log "Step 11 — RHACS Central (onprem) + SecuredCluster/Sensor (cloud)"
+# ─── RHACS Central + SecuredCluster (onprem, self-monitoring) + SecuredCluster (cloud) ───
+log "Step 11 — RHACS Central + SecuredCluster (onprem, self-monitoring) + SecuredCluster (cloud)"
 
 oc apply -f "$REPO_ROOT/infra/rhacs/central.yaml" --context onprem
 ok "Central applied on onprem"
@@ -385,6 +385,30 @@ sed "s#CENTRAL_ENDPOINT_PLACEHOLDER#$CENTRAL_HOST#" \
 ok "SecuredCluster applied on cloud (centralEndpoint=$CENTRAL_HOST:443)"
 
 info "Sensor may take a few minutes to report Ready — check: oc get securedcluster cloud -n stackrox --context cloud"
+
+# Generate a cluster-init bundle for onprem's own Sensor (self-monitoring —
+# Central and Sensor are co-located on the same cluster here, so the manifest
+# points centralEndpoint at the in-cluster Service, not the external Route).
+if oc get secret sensor-tls -n stackrox --context onprem &>/dev/null; then
+  ok "sensor-tls secret already exists on onprem — skipping bundle generation"
+else
+  info "Generating cluster-init bundle for onprem via Central API"
+  BUNDLE_JSON=$(curl -sk -u "admin:$CENTRAL_PASSWORD" \
+    -X POST "https://$CENTRAL_HOST/v1/cluster-init/init-bundles" \
+    -H "Content-Type: application/json" \
+    --data '{"name":"onprem"}')
+  echo "$BUNDLE_JSON" | jq -r '.kubectlBundle' \
+    | base64 -d > /tmp/rhacs-onprem-init-bundle.yaml
+  oc apply -f /tmp/rhacs-onprem-init-bundle.yaml -n stackrox --context onprem
+  rm -f /tmp/rhacs-onprem-init-bundle.yaml
+  ok "Cluster-init bundle applied on onprem (namespace stackrox)"
+fi
+
+# Apply self-monitoring SecuredCluster on onprem (static in-cluster endpoint).
+oc apply -f "$REPO_ROOT/infra/rhacs/secured-cluster-onprem.yaml" --context onprem
+ok "SecuredCluster applied on onprem (centralEndpoint=central.stackrox.svc.cluster.local:443)"
+
+info "Sensor may take a few minutes to report Ready — check: oc get securedcluster onprem -n stackrox --context onprem"
 
 # ─── Phase 2 Checkpoint ───────────────────────────────────────────────────────
 echo ""
@@ -444,6 +468,8 @@ check "PostgreSQL: transactions table has rows" \
 # RHACS
 check "RHACS Central Available (onprem)" \
   "oc get central stackrox-central -n stackrox --context onprem -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
+check "RHACS SecuredCluster Available (onprem, self-monitoring)" \
+  "oc get securedcluster onprem -n stackrox --context onprem -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
 check "RHACS SecuredCluster Available (cloud)" \
   "oc get securedcluster cloud -n stackrox --context cloud -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
 

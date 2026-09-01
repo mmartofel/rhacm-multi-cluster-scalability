@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stackrox
+---
+# Self-monitoring SecuredCluster for onprem — Sensor and Central are co-located
+# on the same cluster, so centralEndpoint uses the in-cluster Service directly
+# instead of the external Route (no RHSI/route hop needed).
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecuredCluster
+metadata:
+  name: onprem
+  namespace: stackrox
+spec:
+  clusterName: onprem
+  centralEndpoint: "central.stackrox.svc.cluster.local:443"

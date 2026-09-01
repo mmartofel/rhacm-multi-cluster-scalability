@@ -164,6 +164,7 @@ C4Deployment
         Container(ossm_onprem_d, "OSSM Control Plane", "istio-system NS  |  SMCP + SMMR")
         Container(keda_onprem_d, "Custom Metrics Autoscaler", "openshift-keda NS  |  ScaledObjects for transaction-processor")
         Container(rhacs_d, "RHACS Central", "stackrox NS  |  Policy engine + pipeline gate")
+        Container(rhacs_sensor_onprem, "RHACS Sensor", "stackrox NS  |  Self-monitors onprem  |  Reports to local Central")
         Container(monitoring_onprem, "Observability Stack", "banking-monitoring NS  |  Grafana + Jaeger + Prometheus rules")
       }
     }
@@ -210,6 +211,7 @@ C4Deployment
   Rel(onprem_ocp, quay_d, "Pulls images", "HTTPS")
   Rel(cloud_ocp, quay_d, "Pulls images", "HTTPS")
   Rel(rhacs_sensor, rhacs_d, "Reports policy status", "gRPC mTLS")
+  Rel(rhacs_sensor_onprem, rhacs_d, "Reports policy status", "gRPC mTLS (in-cluster)")
   Rel(monitoring_cloud, monitoring_onprem, "Federated metrics", "RHACM Observability Add-on")
 ```
 
