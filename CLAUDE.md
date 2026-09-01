@@ -119,11 +119,11 @@ oc login https://api.<cluster-domain>:6443
 
 | Script | Purpose |
 |---|---|
-| `scripts/install-operators.sh --role hub\|spoke [--context <name>]` | Install OLM operators. Hub installs all 9 (RHACM + GitOps + 7 shared); Spoke installs 7 shared only. Default context: `onprem` for hub, `cloud` for spoke. |
+| `scripts/install-operators.sh --role hub\|spoke [--context <name>]` | Install OLM operators. Hub installs all 10 (RHACM + GitOps + Pipelines + Network Observer + 6 shared); Spoke installs 6 shared only. Default context: `onprem` for hub, `cloud` for spoke. |
 | `scripts/operator-check.sh` | Verify all required CSVs are `Succeeded` on both contexts. Exits 1 if any are missing or degraded. Run before Phase 0 bootstrap. |
 | `scripts/bootstrap-phase0.sh` | Full Phase 0 orchestration: operator check → MCH → ManagedCluster import → GitOps readiness → namespaces → pull secrets → ClusterIssuer. Requires `QUAY_USER` and `QUAY_TOKEN` env vars. |
-| `scripts/bootstrap-phase1.sh` | Full Phase 1 orchestration: register cloud cluster with Argo CD → apply Argo CD RBAC for `banking-infra` → apply ApplicationSets → wait for Kafka/PostgreSQL → deploy Skupper sites → exchange AccessGrant/AccessToken → apply Connectors+Listeners → wait for MirrorMaker 2 → Phase 1 checkpoint. No extra env vars required. |
-| `scripts/bootstrap-phase2.sh` | Full Phase 2 orchestration: build all 7 service images via Tekton → apply Skupper app-layer extensions → init PostgreSQL schema → propagate DB credentials → register Avro schemas with Apicurio → apply Argo CD RBAC for `banking-demo` → apply banking-demo ApplicationSet → wait for all pods → Phase 2 checkpoint. Requires `QUAY_ORG`, `QUAY_USER`, `QUAY_TOKEN` env vars (or `source quay.sh`). |
+| `scripts/bootstrap-phase1.sh` | Full Phase 1 orchestration: register cloud cluster with Argo CD → apply Argo CD RBAC for `banking-infra` → apply ApplicationSets → wait for Kafka/PostgreSQL → deploy Skupper sites → exchange AccessGrant/AccessToken → apply Connectors+Listeners → wait for MirrorMaker 2 → deploy RHSI Network Observer → Phase 1 checkpoint. No extra env vars required. |
+| `scripts/bootstrap-phase2.sh` | Full Phase 2 orchestration: build all 7 service images via Tekton → apply Skupper app-layer extensions → init PostgreSQL schema → propagate DB credentials → register Avro schemas with Apicurio → apply Argo CD RBAC for `banking-demo` → apply banking-demo ApplicationSet → wait for all pods → deploy RHACS Central (onprem) + SecuredCluster (cloud) → Phase 2 checkpoint. Requires `QUAY_ORG`, `QUAY_USER`, `QUAY_TOKEN` env vars (or `source quay.sh`). |
 | `get-kubeconfig.sh onprem\|cloud` | Write the current `oc login` session credentials to `kubeconfig-onprem` or `kubeconfig-cloud`, renaming the context to `onprem`/`cloud` regardless of the cluster's real name. Use after token expiry. |
 
 ## Infrastructure Notes
@@ -156,6 +156,15 @@ The `KafkaMirrorMaker2` CR with the new spec structure requires `spec.target.ali
 
 **No routes on cloud cluster from Phase 1 is correct:**
 The cloud Skupper site uses an empty spec (outbound link initiator — no `linkAccess`). Kafka has internal-only listeners. Apicurio is onprem-only. The absence of routes in `banking-infra` on cloud after Phase 1 is expected behaviour.
+
+**RHSI does not ship an OpenShift `ConsolePlugin` — the real UI is the certified `skupper-netobs-operator`:**
+The installed Red Hat Service Interconnect operator (`skupper-operator.v2.2.2-rh-1`) registers no `console.openshift.io/plugins` CSV annotation and creates no `ConsolePlugin` object — confirmed via `oc get consoleplugin` (only unrelated OCP-native plugins are present). The real network-visibility UI ships as a separate, version-paired Red Hat-certified operator: `skupper-netobs-operator` (displayName "Red Hat Service Interconnect Network Observer"), channel `stable-2`, always released in lockstep with `skupper-operator` (both were `v2.2.2-rh-1` at time of writing). It is a Helm-based operator (`helm.sdk.operatorframework.io/v1`) owning the `NetworkObserver` CRD (`observability.skupper.io/v2alpha1`); its CR spec fields are field-for-field identical to the upstream `network-observer` Helm chart's `values.yaml`. Chart/CRD defaults are **not** OpenShift-ready (`auth.strategy` defaults to `basic`, `tls.openshiftIssued` defaults to `false`, `route.enabled` defaults to `false`) — `infra/skupper-netobs/network-observer.yaml` explicitly overrides these to `auth.strategy: openshift`, `tls.openshiftIssued: true`, `route.enabled: true`, matching the CSV's own `alm-examples` recommended sample.
+
+**One Network Observer instance sees the whole multi-site network — deploy once, on onprem:**
+`NetworkObserver.spec.router.endpoint` defaults to `amqps://skupper-router-local`, the local AMQP management endpoint every `skupper-router` exposes in its own namespace. Since both sites' routers are already linked into one mesh (`sites.skupper.io` reports `SITES IN NETWORK: 2` on both onprem and cloud), a single Network Observer attached to either router's local endpoint observes the entire linked network — flow/topology data propagates through the already-established router mesh. It does not need to be deployed per-cluster. `bootstrap-phase1.sh` deploys it once, on onprem, namespace `banking-infra` (alongside the onprem `skupper-router`), after the cross-cluster link is confirmed established.
+
+**`NetworkObserver` readiness — poll condition `Deployed`, not a custom status field:**
+This CRD only exposes the four standard `operator-sdk` Helm-operator conditions (`Initialized`, `Deployed`, `ReleaseFailed`, `Irreconcilable`) — `Deployed: True` (reason `InstallSuccessful`) is the terminal "done" signal and correlates directly with the Deployment becoming Ready; there is no separate `Available` condition on this CRD (contrast with `Central` below, which has both).
 
 ## Phase 2 Operational Notes
 
@@ -277,3 +286,21 @@ The avro-maven-plugin in each Quarkus service reads `.avsc` files from `src/main
 1. Add the `.avsc` file to `services/avro-schemas/` (for Apicurio bootstrap registration)
 2. Copy the same file to `services/<service-name>/src/main/avro/` for every service that imports the generated class
 `TransactionFailed.avsc` must exist in both `services/avro-schemas/` AND `services/transaction-processor/src/main/avro/` — the former for Apicurio, the latter for the Maven build.
+
+**RHACS Central (onprem) + SecuredCluster (cloud) — no `InitBundle` CRD, use Central's REST API:**
+The `rhacs-operator` CSV only owns `Central` and `SecuredCluster` CRDs — there is no CR-based shortcut for cross-cluster registration. The scriptable mechanism is Central's own REST API: `POST https://<central-route>/v1/cluster-init/init-bundles` (Basic Auth `admin:<password>`, JSON body `{"name":"cloud"}`) returns a `kubectlBundle` field (base64-encoded YAML) which, applied via `oc apply -f -` on the spoke cluster's `stackrox` namespace, creates the `sensor-tls`, `collector-tls`, and `admission-control-tls` secrets `SecuredCluster` needs. `bootstrap-phase2.sh` uses this secret set (checking for `sensor-tls`) as its idempotency gate — skip bundle regeneration if it already exists on cloud. `roxctl` is intentionally not used or required.
+
+**Central's admin password is auto-generated — `central-htpasswd` secret, key `password`:**
+`Central.spec.central.adminPasswordSecret` is left unset in `infra/rhacs/central.yaml`, so the operator auto-generates a random admin password and stores it in the `central-htpasswd` secret (same namespace as Central) under the `password` key. There is no separate `roxctl`/CLI step to retrieve it — `oc get secret central-htpasswd -n stackrox -o jsonpath='{.data.password}' | base64 -d`.
+
+**Central's Route object is named `central`, not `stackrox-central`:**
+Even though the `Central` CR itself is named `stackrox-central` (`infra/rhacs/central.yaml`), `spec.central.exposure.route.enabled: true` creates a Route object named `central` (plus a second `central-mtls` internal route) — confirmed live (`oc get route -n stackrox`). Scripts must query `oc get route central -n stackrox`, not `oc get route stackrox-central`.
+
+**Central readiness — poll condition `Available`, not `Deployed`:**
+Unlike the Skupper `NetworkObserver` CRD (whose only "done" signal is `Deployed`), the RHACS operator's `Central`/`SecuredCluster` CRDs report `Deployed: True` as soon as the underlying Helm release is installed — long before Central is actually up (confirmed live: `Deployed` went `True` at nearly the same instant the CR was created, while `central`/`central-db`/`scanner` pods were still `0/1 Running`/`Pending`). The correct "actually serving" signal is the `Available` condition, which only flips `True` once all workloads report ready (message: `"N of M workloads are not ready: ..."` while waiting). Both `bootstrap-phase2.sh`'s wait loop and its checkpoint check poll `Available`.
+
+**Sensor↔Central traffic goes over Central's public Route, not through RHSI:**
+`SecuredCluster.spec.centralEndpoint` is set to Central's Route host (`<host>:443`, no scheme prefix) — Sensor on cloud connects directly to Central's public gRPC-over-HTTPS endpoint (reencrypt-terminated Route), authenticated via the init-bundle-issued mTLS certs. This does **not** use the Skupper/RHSI tunnel; no new Skupper Connector/Listener is required for RHACS.
+
+**Central's default resource requests can exceed available capacity on constrained sandbox clusters:**
+On a cluster already running the full banking-demo stack plus RHACM/GitOps/other operators, `central-db`'s default resource request can fail to schedule (`FailedScheduling: Insufficient cpu`), leaving Central permanently non-`Available` even though the CR/Route/secrets are all correctly created. This is a capacity-planning issue, not an automation bug — if `central-db` stays `Pending`, check `oc describe pod -n stackrox -l app=central-db` for `FailedScheduling` before assuming the RHACS wiring itself is broken; either free up worker capacity or reduce `spec.central.resources`/`spec.scanner` sizing.

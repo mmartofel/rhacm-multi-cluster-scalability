@@ -58,7 +58,7 @@ source quay.sh
 
 ## 3. Install operators
 
-Install required OLM operators on both clusters — all 9 on the hub (`onprem`), the 7 shared ones on the spoke (`cloud`):
+Install required OLM operators on both clusters — all 10 on the hub (`onprem`), the 6 shared ones on the spoke (`cloud`):
 
 ```bash
 ./scripts/install-operators.sh --role hub   --context onprem
@@ -84,7 +84,9 @@ This runs the operator check, installs the RHACM `MultiClusterHub`, imports `clo
 ./scripts/bootstrap-phase1.sh
 ```
 
-This registers `cloud` with Argo CD, grants the Argo CD RBAC needed to sync `banking-infra`, applies the infra `ApplicationSet`s, waits for Kafka/PostgreSQL to come up, deploys the Skupper (RHSI) sites, exchanges the `AccessGrant`/`AccessToken`, wires up Connectors/Listeners, waits for MirrorMaker 2, and ends with a Phase 1 checkpoint.
+This registers `cloud` with Argo CD, grants the Argo CD RBAC needed to sync `banking-infra`, applies the infra `ApplicationSet`s, waits for Kafka/PostgreSQL to come up, deploys the Skupper (RHSI) sites, exchanges the `AccessGrant`/`AccessToken`, wires up Connectors/Listeners, waits for MirrorMaker 2, deploys the RHSI Network Observer (network console UI, onprem-only — see below), and ends with a Phase 1 checkpoint.
+
+Once complete, the network console is reachable at the printed Route URL (login with your OpenShift credentials) and shows live topology/traffic across both linked sites.
 
 No extra env vars are required beyond `KUBECONFIG` (auto-configured).
 
@@ -95,7 +97,9 @@ source quay.sh   # ensures QUAY_ORG, QUAY_USER, QUAY_TOKEN are set
 ./scripts/bootstrap-phase2.sh
 ```
 
-This builds all 7 service images via Tekton, applies the Skupper application-layer extensions, initializes the PostgreSQL schema, propagates DB credentials to both clusters, registers Avro schemas with Apicurio, grants Argo CD RBAC for `banking-demo`, applies the app `ApplicationSet`, and ends with a Phase 2 checkpoint once all pods are healthy.
+This builds all 7 service images via Tekton, applies the Skupper application-layer extensions, initializes the PostgreSQL schema, propagates DB credentials to both clusters, registers Avro schemas with Apicurio, grants Argo CD RBAC for `banking-demo`, applies the app `ApplicationSet`, waits for all pods, deploys RHACS Central (onprem) and registers cloud as a Sensor/`SecuredCluster` via an automated cluster-init bundle exchange, and ends with a Phase 2 checkpoint once everything is healthy.
+
+The RHACS console URL and a pointer to the auto-generated admin password (`central-htpasswd` secret) are printed at the end. Note: `central-db`'s default resource requests can be significant — on a resource-constrained cluster it may stay `Pending` until capacity frees up; this doesn't indicate a broken deployment.
 
 > `scripts/build-push-images-local.sh` is a fallback that builds images locally with podman/docker instead of Tekton — prefer `bootstrap-phase2.sh` unless Tekton is unavailable.
 
@@ -108,6 +112,10 @@ This builds all 7 service images via Tekton, applies the Skupper application-lay
 # Watch pods on both clusters
 oc --context onprem get pods -n banking-demo -n banking-infra
 oc --context cloud   get pods -n banking-demo -n banking-infra
+
+# RHSI network console (Phase 1) and RHACS console (Phase 2)
+oc --context onprem get route skupper-network-observer -n banking-infra
+oc --context onprem get route central -n stackrox
 ```
 
 ## Refreshing an expired token
@@ -125,11 +133,11 @@ Restarting a pod does **not** rebuild its image — it just re-pulls the existin
 
 | Script | Purpose |
 |---|---|
-| `scripts/install-operators.sh --role hub\|spoke [--context <name>]` | Install OLM operators. Hub installs all 9; spoke installs the 7 shared ones. |
+| `scripts/install-operators.sh --role hub\|spoke [--context <name>]` | Install OLM operators. Hub installs all 10; spoke installs the 6 shared ones. |
 | `scripts/operator-check.sh` | Verify all required CSVs are `Succeeded` on both contexts. |
 | `scripts/bootstrap-phase0.sh` | Phase 0: operator check → MCH → ManagedCluster import → GitOps readiness → namespaces → pull secrets → ClusterIssuer. Requires `QUAY_USER`/`QUAY_TOKEN`. |
-| `scripts/bootstrap-phase1.sh` | Phase 1: Argo CD registration/RBAC → Kafka/PostgreSQL → Skupper (RHSI) → MirrorMaker 2 → checkpoint. |
-| `scripts/bootstrap-phase2.sh` | Phase 2: Tekton image builds → Skupper app-layer → DB schema/credentials → Avro schema registration → Argo CD RBAC → app deploy → checkpoint. Requires `QUAY_ORG`/`QUAY_USER`/`QUAY_TOKEN`. |
+| `scripts/bootstrap-phase1.sh` | Phase 1: Argo CD registration/RBAC → Kafka/PostgreSQL → Skupper (RHSI) → MirrorMaker 2 → RHSI Network Observer → checkpoint. |
+| `scripts/bootstrap-phase2.sh` | Phase 2: Tekton image builds → Skupper app-layer → DB schema/credentials → Avro schema registration → Argo CD RBAC → app deploy → RHACS Central + SecuredCluster → checkpoint. Requires `QUAY_ORG`/`QUAY_USER`/`QUAY_TOKEN`. |
 | `scripts/build-push-images-local.sh` | Fallback local image build (podman/docker) instead of Tekton. |
 | `get-kubeconfig.sh onprem\|cloud` | Save the current `oc login` session to the per-cluster kubeconfig file. |
 | `rollout.sh` | Force a rollout restart of all `banking-demo` deployments on both clusters. |

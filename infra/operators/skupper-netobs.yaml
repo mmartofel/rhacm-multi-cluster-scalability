@@ -1,0 +1,10 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: skupper-netobs-operator
+  namespace: openshift-operators
+spec:
+  channel: stable-2
+  name: skupper-netobs-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace

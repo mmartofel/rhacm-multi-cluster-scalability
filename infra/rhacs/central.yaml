@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stackrox
+---
+apiVersion: platform.stackrox.io/v1alpha1
+kind: Central
+metadata:
+  name: stackrox-central
+  namespace: stackrox
+spec:
+  central:
+    exposure:
+      route:
+        enabled: true

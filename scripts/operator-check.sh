@@ -24,6 +24,7 @@ HUB_OPS=(
   advanced-cluster-management
   openshift-gitops-operator
   openshift-pipelines-operator-rh
+  skupper-netobs-operator
 )
 
 any_missing=0

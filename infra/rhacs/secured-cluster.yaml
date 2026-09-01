@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stackrox
+---
+# centralEndpoint is injected at apply time by bootstrap-phase2.sh once the
+# onprem Central Route host is known — see the "sed CENTRAL_ENDPOINT_PLACEHOLDER"
+# step there.
+apiVersion: platform.stackrox.io/v1alpha1
+kind: SecuredCluster
+metadata:
+  name: cloud
+  namespace: stackrox
+spec:
+  clusterName: cloud
+  centralEndpoint: "CENTRAL_ENDPOINT_PLACEHOLDER:443"

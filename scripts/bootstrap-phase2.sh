@@ -326,6 +326,58 @@ for dep in "${CLOUD_DEPLOYMENTS[@]}"; do
   wait_deployment "$dep" cloud || FAILED_DEPS+=("cloud/$dep")
 done
 
+# ─── RHACS Central (onprem) + SecuredCluster (cloud) ─────────────────────────
+log "Step 11 — RHACS Central (onprem) + SecuredCluster/Sensor (cloud)"
+
+oc apply -f "$REPO_ROOT/infra/rhacs/central.yaml" --context onprem
+ok "Central applied on onprem"
+
+info "Waiting for Central to become Available (up to 15 min) — this can be slow on resource-constrained clusters"
+CENTRAL_DEADLINE=$((SECONDS + 900))
+while [[ $SECONDS -lt $CENTRAL_DEADLINE ]]; do
+  CENTRAL_AVAILABLE=$(oc get central stackrox-central -n stackrox --context onprem \
+    -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "")
+  [[ "$CENTRAL_AVAILABLE" == "True" ]] && break
+  sleep 20
+done
+
+if [[ "$CENTRAL_AVAILABLE" != "True" ]]; then
+  fail "Central did not become Available within 15 min — check: oc get pods -n stackrox --context onprem"
+fi
+ok "Central Available"
+
+CENTRAL_HOST=$(oc get route central -n stackrox --context onprem \
+  -o jsonpath='{.spec.host}')
+CENTRAL_PASSWORD=$(oc get secret central-htpasswd -n stackrox --context onprem \
+  -o jsonpath='{.data.password}' | base64 -d)
+ok "Central Route: https://$CENTRAL_HOST (admin password in central-htpasswd secret)"
+
+# Generate a cluster-init bundle for cloud's Sensor (idempotent: skip if the
+# bundle secrets already exist on cloud from a previous run). The kubectlBundle
+# creates sensor-tls, collector-tls, and admission-control-tls secrets.
+if oc get secret sensor-tls -n stackrox --context cloud &>/dev/null; then
+  ok "sensor-tls secret already exists on cloud — skipping bundle generation"
+else
+  info "Generating cluster-init bundle for cloud via Central API"
+  BUNDLE_JSON=$(curl -sk -u "admin:$CENTRAL_PASSWORD" \
+    -X POST "https://$CENTRAL_HOST/v1/cluster-init/init-bundles" \
+    -H "Content-Type: application/json" \
+    --data '{"name":"cloud"}')
+  echo "$BUNDLE_JSON" | jq -r '.kubectlBundle' \
+    | base64 -d > /tmp/rhacs-cloud-init-bundle.yaml
+  oc apply -f /tmp/rhacs-cloud-init-bundle.yaml -n stackrox --context cloud
+  rm -f /tmp/rhacs-cloud-init-bundle.yaml
+  ok "Cluster-init bundle applied on cloud (namespace stackrox)"
+fi
+
+# Apply SecuredCluster on cloud with the real Central Route host injected.
+sed "s#CENTRAL_ENDPOINT_PLACEHOLDER#$CENTRAL_HOST#" \
+  "$REPO_ROOT/infra/rhacs/secured-cluster.yaml" \
+  | oc apply -f - --context cloud
+ok "SecuredCluster applied on cloud (centralEndpoint=$CENTRAL_HOST:443)"
+
+info "Sensor may take a few minutes to report Ready — check: oc get securedcluster cloud -n stackrox --context cloud"
+
 # ─── Phase 2 Checkpoint ───────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════"
@@ -381,6 +433,12 @@ fi
 check "PostgreSQL: transactions table has rows" \
   "oc exec -n banking-infra --context onprem $PG_POD -- psql -U postgres postgres -t -c 'SELECT COUNT(*) FROM transactions' 2>/dev/null | grep -qE '[1-9]'"
 
+# RHACS
+check "RHACS Central Available (onprem)" \
+  "oc get central stackrox-central -n stackrox --context onprem -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
+check "RHACS SecuredCluster Available (cloud)" \
+  "oc get securedcluster cloud -n stackrox --context cloud -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
+
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo "  Result: $PASS passed / $FAIL failed"
@@ -401,4 +459,5 @@ fi
 echo ""
 echo "Dashboard:  https://$DASH_HOST"
 echo "WS metrics: wss://$DASH_HOST/ws/metrics"
+echo "RHACS:      https://${CENTRAL_HOST:-<not-deployed>} (admin password: oc get secret central-htpasswd -n stackrox --context onprem -o jsonpath='{.data.password}' | base64 -d)"
 echo ""

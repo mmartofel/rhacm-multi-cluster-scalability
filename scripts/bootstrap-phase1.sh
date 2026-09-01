@@ -292,6 +292,25 @@ wait_for_jsonpath "banking-mirror (cloud)" 600 \
   '{.status.conditions[?(@.type=="Ready")].status}' "True"
 ok "MirrorMaker 2 ready"
 
+# ── Step 11: Deploy Skupper Network Observer (network console) ────────────
+log "Step 11: Deploy Red Hat Service Interconnect Network Observer on onprem"
+
+oc --context "${ONPREM}" apply \
+  -f "${REPO_ROOT}/infra/skupper-netobs/network-observer.yaml"
+ok "NetworkObserver applied on onprem"
+
+printf 'Waiting for Network Observer to be deployed'
+wait_for_jsonpath "network observer (onprem)" 300 \
+  "${ONPREM}" "networkobserver/skupper-network-observer" "${INFRA_NS}" \
+  '{.status.conditions[?(@.type=="Deployed")].status}' "True"
+ok "Network Observer ready"
+
+NETOBS_HOST=$(oc --context "${ONPREM}" get route skupper-network-observer \
+  -n "${INFRA_NS}" -o jsonpath='{.spec.host}' 2>/dev/null || true)
+if [[ -n "${NETOBS_HOST}" ]]; then
+  info "Network console: https://${NETOBS_HOST} (login with OpenShift credentials)"
+fi
+
 # ── Phase 1 Checkpoint ────────────────────────────────────────────────────
 log "Phase 1 Checkpoint"
 
@@ -308,6 +327,11 @@ check() {
     FAIL=$(( FAIL + 1 ))
   fi
 }
+
+check "Network Observer Ready (onprem)" bash -c \
+  "oc --context ${ONPREM} get networkobserver skupper-network-observer -n ${INFRA_NS} \
+   -o jsonpath='{.status.conditions[?(@.type==\"Deployed\")].status}' \
+   | grep -q '^True$'"
 
 check "Kafka Ready (onprem)" bash -c \
   "oc --context ${ONPREM} get kafka banking-kafka -n ${INFRA_NS} \
@@ -370,3 +394,4 @@ printf 'Quick reference:\n'
 printf '  oc --context onprem get kafka,postgrescluster,deployment -n banking-infra\n'
 printf '  oc --context cloud  get kafka,postgrescluster,kafkamirrormaker2 -n banking-infra\n'
 printf '  oc --context cloud  get links.skupper.io,listeners.skupper.io -n banking-infra\n'
+printf '  oc --context onprem get route skupper-network-observer -n banking-infra\n'

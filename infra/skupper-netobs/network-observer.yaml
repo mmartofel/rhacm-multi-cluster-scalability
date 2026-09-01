@@ -1,0 +1,17 @@
+apiVersion: observability.skupper.io/v2alpha1
+kind: NetworkObserver
+metadata:
+  name: skupper-network-observer
+  namespace: banking-infra
+spec:
+  route:
+    enabled: true
+    subdomain: network-observer
+  auth:
+    strategy: openshift
+    openshift:
+      createCookieSecret: true
+      serviceAccount:
+        create: true
+  tls:
+    openshiftIssued: true

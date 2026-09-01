@@ -58,7 +58,7 @@ CTX=""
 
 usage() {
   printf 'Usage: %s --role hub|spoke [--context <name>]\n\n' "$(basename "$0")"
-  printf '  --role hub    Install all 9 operators (RHACM + GitOps + Pipelines + 6 shared)\n'
+  printf '  --role hub    Install all 10 operators (RHACM + GitOps + Pipelines + Network Observer + 6 shared)\n'
   printf '  --role spoke  Install 6 shared operators only (skip RHACM + GitOps + Pipelines)\n'
   printf '  --context     Override oc context (default: onprem for hub, cloud for spoke)\n'
   exit 1
@@ -103,11 +103,13 @@ HUB_PREFIXES=(
   advanced-cluster-management
   openshift-gitops-operator
   openshift-pipelines-operator-rh
+  skupper-netobs-operator
 )
 HUB_MANIFESTS=(
   rhacm.yaml
   gitops.yaml
   pipelines.yaml
+  skupper-netobs.yaml
 )
 
 # ── Pre-flight ─────────────────────────────────────────────────────────────
