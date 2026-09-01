@@ -37,7 +37,7 @@ export default function LoadControlPanel({ payload }: Props) {
   const currentPreset = PRESETS.find(p => p.tps === currentTps);
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 24, maxWidth: 720 }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 24, width: '100%' }}>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: '#f0f0f0', marginBottom: 4 }}>Load Control</div>
         <div style={{ fontSize: 13, color: '#8a8d90' }}>
@@ -100,11 +100,11 @@ export default function LoadControlPanel({ payload }: Props) {
 
       <div style={{ marginTop: 24, borderTop: '1px solid #2a2d32', paddingTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#c0c2c5', marginBottom: 12 }}>What to observe</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12, color: '#8a8d90' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10, fontSize: 12, color: '#8a8d90' }}>
           <div>■ TPM chart — red dashed line marks onprem capacity (6000 TPM)</div>
           <div>■ KPI strip — Processing Mode switches Onprem Only → Cloud Burst at 100 TPS</div>
           <div>■ Autoscale Watch — GCP pod count ramps gradually over ~90 s (lagThreshold=500)</div>
-          <div>■ Cloud pods stay up 5 min after load drops (cooldownPeriod=300 s)</div>
+          <div>■ Cloud pods stay up 1 min after load drops (cooldownPeriod=60 s)</div>
         </div>
       </div>
     </div>
