@@ -4,13 +4,12 @@ import { TpmPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
 import { ONPREM_COLOR, ONPREM_COLOR_ALPHA, CLOUD_COLOR, CLOUD_COLOR_ALPHA, DARK_AXIS } from '../colors';
 
-interface Props { history: TpmPoint[]; }
+interface Props { history: TpmPoint[]; capacityTps?: number; }
 
-const CAPACITY_TPM = ONPREM_CAPACITY_TPS * 60;
-
-export default function TpmChart({ history }: Props) {
+export default function TpmChart({ history, capacityTps = ONPREM_CAPACITY_TPS }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(560);
+  const capacityTpm = capacityTps * 60;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -20,8 +19,8 @@ export default function TpmChart({ history }: Props) {
   }, []);
 
   const maxY = history.length > 0
-    ? Math.max(CAPACITY_TPM, ...history.map(p => Math.max(p.onprem, p.cloud)))
-    : CAPACITY_TPM;
+    ? Math.max(capacityTpm, ...history.map(p => Math.max(p.onprem, p.cloud)))
+    : capacityTpm;
 
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px' }}>
@@ -30,7 +29,7 @@ export default function TpmChart({ history }: Props) {
         <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
           <span style={{ color: ONPREM_COLOR }}>■ On-Prem</span>
           <span style={{ color: CLOUD_COLOR }}>■ Cloud</span>
-          <span style={{ color: '#c9190b' }}>– – Onprem capacity ({ONPREM_CAPACITY_TPS} TPS)</span>
+          <span style={{ color: '#c9190b' }}>– – Onprem capacity ({capacityTps} TPS)</span>
         </div>
       </div>
       <div ref={containerRef}>
@@ -67,8 +66,8 @@ export default function TpmChart({ history }: Props) {
             </ChartGroup>
             <ChartLine
               data={[
-                { x: history[0].ts, y: CAPACITY_TPM },
-                { x: history[history.length - 1].ts, y: CAPACITY_TPM },
+                { x: history[0].ts, y: capacityTpm },
+                { x: history[history.length - 1].ts, y: capacityTpm },
               ]}
               style={{ data: { stroke: '#c9190b', strokeWidth: 1.5, strokeDasharray: '6,3' } }}
             />

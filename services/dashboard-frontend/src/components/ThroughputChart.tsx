@@ -4,9 +4,9 @@ import { ThroughputPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
 import { ONPREM_COLOR, CLOUD_COLOR, GEN_COLOR, DARK_AXIS } from '../colors';
 
-interface Props { history: ThroughputPoint[]; }
+interface Props { history: ThroughputPoint[]; capacityTps?: number; }
 
-export default function ThroughputChart({ history }: Props) {
+export default function ThroughputChart({ history, capacityTps = ONPREM_CAPACITY_TPS }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(560);
 
@@ -19,8 +19,8 @@ export default function ThroughputChart({ history }: Props) {
 
   const isEstimated = history.length > 0 && history[history.length - 1].estimated;
   const maxY = history.length > 0
-    ? Math.max(ONPREM_CAPACITY_TPS, ...history.map(p => Math.max(p.genRate, p.onpremCommit, p.cloudCommit)))
-    : ONPREM_CAPACITY_TPS;
+    ? Math.max(capacityTps, ...history.map(p => Math.max(p.genRate, p.onpremCommit, p.cloudCommit)))
+    : capacityTps;
 
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px' }}>
@@ -30,7 +30,7 @@ export default function ThroughputChart({ history }: Props) {
           <span style={{ color: GEN_COLOR }}>— Generator</span>
           <span style={{ color: ONPREM_COLOR }}>— On-Prem commit</span>
           <span style={{ color: CLOUD_COLOR }}>— Cloud commit</span>
-          <span style={{ color: '#c9190b' }}>– – Onprem cap. ({ONPREM_CAPACITY_TPS} TPS)</span>
+          <span style={{ color: '#c9190b' }}>– – Onprem cap. ({capacityTps} TPS)</span>
         </div>
       </div>
       <div style={{ padding: '0 12px 8px', fontSize: 12, color: '#6a6e73', display: 'flex', justifyContent: 'space-between' }}>
@@ -77,8 +77,8 @@ export default function ThroughputChart({ history }: Props) {
             </ChartGroup>
             <ChartLine
               data={[
-                { x: history[0].ts, y: ONPREM_CAPACITY_TPS },
-                { x: history[history.length - 1].ts, y: ONPREM_CAPACITY_TPS },
+                { x: history[0].ts, y: capacityTps },
+                { x: history[history.length - 1].ts, y: capacityTps },
               ]}
               style={{ data: { stroke: '#c9190b', strokeWidth: 1.5, strokeDasharray: '6,3' } }}
             />

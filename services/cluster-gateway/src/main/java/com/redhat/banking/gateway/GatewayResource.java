@@ -69,56 +69,14 @@ public class GatewayResource {
 
     @PUT
     @Path("/traffic-weight")
-    @Blocking
     public Response setTrafficWeight(Map<String, Integer> body) {
         int weight = body.getOrDefault("trafficWeight", trafficWeight.get());
         trafficWeight.set(Math.max(0, Math.min(100, weight)));
 
-        int[] partitions = computeOwnedPartitions(weight);
-        String partitionJson = buildPartitionJson(partitions);
-        // Processor first — it claims the partitions before the generator starts sending to them
-        httpPut("http://transaction-processor.banking-demo.svc.cluster.local:8080/api/processor/stats/partitions", partitionJson);
-        httpPut("http://transaction-generator.banking-demo.svc.cluster.local:8080/api/generator/partitions", partitionJson);
-
         return Response.ok(Map.of(
                 "cluster", cluster,
-                "trafficWeight", trafficWeight.get(),
-                "ownedPartitions", partitions
+                "trafficWeight", trafficWeight.get()
         )).build();
-    }
-
-    // 6-partition topic; onprem owns [0..n-1], cloud owns [n..5]
-    private int[] computeOwnedPartitions(int myWeight) {
-        int onpremCount = Math.round(6 * ("onprem".equals(cluster) ? myWeight : 100 - myWeight) / 100.0f);
-        int start = "onprem".equals(cluster) ? 0 : onpremCount;
-        int end   = "onprem".equals(cluster) ? onpremCount : 6;
-        int[] result = new int[end - start];
-        for (int i = 0; i < result.length; i++) result[i] = start + i;
-        return result;
-    }
-
-    private static String buildPartitionJson(int[] partitions) {
-        StringBuilder sb = new StringBuilder("{\"partitions\":[");
-        for (int i = 0; i < partitions.length; i++) {
-            if (i > 0) sb.append(',');
-            sb.append(partitions[i]);
-        }
-        sb.append("]}");
-        return sb.toString();
-    }
-
-    private void httpPut(String url, String jsonBody) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofMillis(800))
-                    .header("Content-Type", "application/json")
-                    .PUT(HttpRequest.BodyPublishers.ofString(jsonBody))
-                    .build();
-            client.send(req, HttpResponse.BodyHandlers.discarding());
-        } catch (Exception ignored) {
-        }
     }
 
     @PUT

@@ -9,16 +9,17 @@ interface Props {
   onModeChange?: (mode: ProcessingMode) => void;
 }
 
-// 7 steps aligned to Kafka partition boundaries (6 partitions total)
-// onprem owns [0..n-1], cloud owns [n..5] where n = round(6 * onpremWeight / 100)
+// 7 discrete traffic-split steps — pure generation-rate split (% of TPS routed to each
+// cluster). Kafka partitions are statically assigned per cluster (see PartitionMap below)
+// and no longer move with this slider.
 const STEPS = [
-  { onpremWeight: 0,   onpremParts: '—',   cloudParts: '0–5' },
-  { onpremWeight: 17,  onpremParts: '0',   cloudParts: '1–5' },
-  { onpremWeight: 33,  onpremParts: '0–1', cloudParts: '2–5' },
-  { onpremWeight: 50,  onpremParts: '0–2', cloudParts: '3–5' },
-  { onpremWeight: 67,  onpremParts: '0–3', cloudParts: '4–5' },
-  { onpremWeight: 83,  onpremParts: '0–4', cloudParts: '5'   },
-  { onpremWeight: 100, onpremParts: '0–5', cloudParts: '—'   },
+  { onpremWeight: 0 },
+  { onpremWeight: 17 },
+  { onpremWeight: 33 },
+  { onpremWeight: 50 },
+  { onpremWeight: 67 },
+  { onpremWeight: 83 },
+  { onpremWeight: 100 },
 ];
 
 function nearestStep(onpremWeight: number): number {
@@ -120,9 +121,7 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         {/* Endpoint labels */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <span style={{ fontSize: 13, color: ONPREM_COLOR, fontWeight: 700 }}>On-Prem {onpremPct}%</span>
-          <span style={{ fontSize: 11, color: '#8a8d90' }}>
-            On-Prem [{current.onpremParts}] · Cloud [{current.cloudParts}]
-          </span>
+          <span style={{ fontSize: 11, color: '#8a8d90' }}>generation-rate split</span>
           <span style={{ fontSize: 13, color: CLOUD_COLOR, fontWeight: 700 }}>Cloud {cloudPct}%</span>
         </div>
 

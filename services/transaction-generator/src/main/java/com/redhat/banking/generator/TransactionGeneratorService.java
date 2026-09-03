@@ -38,10 +38,6 @@ public class TransactionGeneratorService {
         return result;
     }
 
-    public void setOwnedPartitions(int[] partitions) {
-        ownedPartitions = partitions;
-    }
-
     private int computePartition(String key) {
         int[] current = ownedPartitions;
         if (current.length == 0) return -1;

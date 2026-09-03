@@ -65,10 +65,6 @@ public class TransactionProcessor {
                 .map(String::trim).map(Integer::parseInt).collect(Collectors.toSet());
     }
 
-    public void setOwnedPartitions(Set<Integer> partitions) {
-        ownedPartitions.set(partitions);
-    }
-
     public Set<Integer> getOwnedPartitions() {
         return ownedPartitions.get();
     }

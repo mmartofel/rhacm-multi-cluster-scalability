@@ -54,7 +54,7 @@ public class ClusterPoller {
         metrics.add(pollCluster("onprem", onpremGatewayUrl, onpremLedgerUrl, intervalSecs));
         metrics.add(pollCluster("cloud", cloudGatewayUrl, cloudLedgerUrl, intervalSecs));
 
-        MetricsPayload payload = new MetricsPayload(metrics, nowMs);
+        MetricsPayload payload = new MetricsPayload(metrics, nowMs, dashboardResource.getOnpremCapacityTps());
         try {
             broadcaster.publish(mapper.writeValueAsString(payload));
         } catch (Exception e) {

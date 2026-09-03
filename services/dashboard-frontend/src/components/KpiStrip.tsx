@@ -6,6 +6,7 @@ import { ONPREM_COLOR, CLOUD_COLOR, CAPACITY_COLOR, HEALTHY_COLOR } from '../col
 interface Props {
   payload: MetricsPayload | null;
   processingMode: ProcessingMode;
+  capacityTps?: number;
 }
 
 interface Tile {
@@ -15,14 +16,16 @@ interface Tile {
   accent: string;
 }
 
-const MODE_CONFIG: Record<ProcessingMode, { label: string; sub: string; accent: string }> = {
-  'auto-burst':  { label: 'Auto Burst',          sub: '≤100 TPS onprem · cloud scales on overflow', accent: HEALTHY_COLOR },
-  'onprem-only': { label: 'Route 100% → On-Prem', sub: 'all traffic routed to onprem cluster',       accent: ONPREM_COLOR  },
-  'split':       { label: 'Split 50 / 50',       sub: 'traffic split equally across clusters',       accent: '#8476d1'     },
-  'cloud-only':  { label: 'Route 100% → Cloud',  sub: 'all traffic routed to cloud cluster',        accent: CLOUD_COLOR   },
-};
+function modeConfig(capacityTps: number): Record<ProcessingMode, { label: string; sub: string; accent: string }> {
+  return {
+    'auto-burst':  { label: 'Auto Burst',          sub: `≤${capacityTps} TPS onprem · cloud scales on overflow`, accent: HEALTHY_COLOR },
+    'onprem-only': { label: 'Route 100% → On-Prem', sub: 'all traffic routed to onprem cluster',       accent: ONPREM_COLOR  },
+    'split':       { label: 'Split 50 / 50',       sub: 'traffic split equally across clusters',       accent: '#8476d1'     },
+    'cloud-only':  { label: 'Route 100% → Cloud',  sub: 'all traffic routed to cloud cluster',        accent: CLOUD_COLOR   },
+  };
+}
 
-export default function KpiStrip({ payload, processingMode }: Props) {
+export default function KpiStrip({ payload, processingMode, capacityTps = ONPREM_CAPACITY_TPS }: Props) {
   const onprem = payload?.clusters.find(c => c.cluster === 'onprem');
   const cloud = payload?.clusters.find(c => c.cluster === 'cloud');
 
@@ -34,7 +37,7 @@ export default function KpiStrip({ payload, processingMode }: Props) {
   const totalCount = payload?.clusters.length ?? 0;
   const totalRejected = (onprem?.rejectedTotal ?? 0) + (cloud?.rejectedTotal ?? 0);
 
-  const modeConf = MODE_CONFIG[processingMode];
+  const modeConf = modeConfig(capacityTps)[processingMode];
   const modeLabel = processingMode === 'split' && onprem
     ? `Split ${onprem.trafficWeight} / ${100 - onprem.trafficWeight}`
     : modeConf.label;

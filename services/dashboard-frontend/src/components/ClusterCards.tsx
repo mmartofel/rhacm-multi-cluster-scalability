@@ -2,7 +2,7 @@ import React from 'react';
 import { MetricsPayload, ClusterMetrics, ONPREM_CAPACITY_TPS } from '../types/metrics';
 import { ONPREM_COLOR, CLOUD_COLOR } from '../colors';
 
-interface Props { payload: MetricsPayload | null; }
+interface Props { payload: MetricsPayload | null; capacityTps?: number; }
 
 function fmt(n: number, decimals = 0) {
   return n.toLocaleString('en', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -106,9 +106,9 @@ function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
   );
 }
 
-export default function ClusterCards({ payload }: Props) {
+export default function ClusterCards({ payload, capacityTps = ONPREM_CAPACITY_TPS }: Props) {
   const genTps = payload?.clusters.find(c => c.cluster === 'onprem')?.generatorTps ?? 0;
-  const isBurst = genTps > ONPREM_CAPACITY_TPS;
+  const isBurst = genTps > capacityTps;
   return (
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16, flex: 1 }}>
       <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 14 }}>Cluster Status</div>
