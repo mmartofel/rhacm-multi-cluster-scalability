@@ -48,34 +48,13 @@ public class DashboardResource {
 
     int getCurrentTrafficWeight() { return currentTrafficWeight.get(); }
 
-    @PUT
-    @Path("/traffic-weight")
-    public Response setTrafficWeight(Map<String, Integer> body) {
-        int onpremWeight = Math.max(0, Math.min(100, body.getOrDefault("trafficWeight", 100)));
-        int cloudWeight = 100 - onpremWeight;
-        currentTrafficWeight.set(onpremWeight);
+    private record TpsSplit(int onpremTps, int cloudTps, boolean onpremOk, boolean cloudOk) {}
 
-        boolean onpremOk = httpPut(onpremGatewayUrl + "/api/gateway/traffic-weight",
-                "{\"trafficWeight\":" + onpremWeight + "}");
-        boolean cloudOk = httpPut(cloudGatewayUrl + "/api/gateway/traffic-weight",
-                "{\"trafficWeight\":" + cloudWeight + "}");
-
-        return Response.ok(Map.of(
-                "trafficWeight", onpremWeight,
-                "onprem", onpremWeight,
-                "cloud", cloudWeight,
-                "onpremUpdated", onpremOk,
-                "cloudUpdated", cloudOk
-        )).build();
-    }
-
-    // Splits total TPS across clusters according to the current Traffic Split weight:
+    // Splits total TPS across clusters according to the given Traffic Split weight and pushes
+    // it to both generators immediately:
     // - weight == 100 (Auto Burst): onprem takes up to its capacity, cloud absorbs overflow.
     // - otherwise: proportional to the configured weight.
-    @PUT
-    @Path("/generator/tps/{total}")
-    public Response setGeneratorTps(@PathParam("total") int total) {
-        int weight = currentTrafficWeight.get();
+    private TpsSplit applyTpsSplit(int total, int weight) {
         int onpremTps;
         int cloudTps;
 
@@ -91,13 +70,49 @@ public class DashboardResource {
         boolean cloudOk  = httpPut(cloudGatewayUrl  + "/api/gateway/generator/tps/" + cloudTps,  "");
         lastTotalTps.set(total);
 
+        return new TpsSplit(onpremTps, cloudTps, onpremOk, cloudOk);
+    }
+
+    @PUT
+    @Path("/traffic-weight")
+    public Response setTrafficWeight(Map<String, Integer> body) {
+        int onpremWeight = Math.max(0, Math.min(100, body.getOrDefault("trafficWeight", 100)));
+        int cloudWeight = 100 - onpremWeight;
+        currentTrafficWeight.set(onpremWeight);
+
+        boolean onpremWeightOk = httpPut(onpremGatewayUrl + "/api/gateway/traffic-weight",
+                "{\"trafficWeight\":" + onpremWeight + "}");
+        boolean cloudWeightOk = httpPut(cloudGatewayUrl + "/api/gateway/traffic-weight",
+                "{\"trafficWeight\":" + cloudWeight + "}");
+
+        // Re-apply the currently running TPS at the new split immediately, so a live weight
+        // change redistributes generation without waiting for a new Load Control action.
+        TpsSplit split = applyTpsSplit(lastTotalTps.get(), onpremWeight);
+
+        return Response.ok(Map.of(
+                "trafficWeight", onpremWeight,
+                "onprem", onpremWeight,
+                "cloud", cloudWeight,
+                "onpremTps", split.onpremTps(),
+                "cloudTps", split.cloudTps(),
+                "onpremUpdated", onpremWeightOk && split.onpremOk(),
+                "cloudUpdated", cloudWeightOk && split.cloudOk()
+        )).build();
+    }
+
+    @PUT
+    @Path("/generator/tps/{total}")
+    public Response setGeneratorTps(@PathParam("total") int total) {
+        int weight = currentTrafficWeight.get();
+        TpsSplit split = applyTpsSplit(total, weight);
+
         return Response.ok(Map.of(
                 "total", total,
-                "onpremTps", onpremTps,
-                "cloudTps", cloudTps,
+                "onpremTps", split.onpremTps(),
+                "cloudTps", split.cloudTps(),
                 "trafficWeight", weight,
-                "onpremUpdated", onpremOk,
-                "cloudUpdated", cloudOk
+                "onpremUpdated", split.onpremOk(),
+                "cloudUpdated", split.cloudOk()
         )).build();
     }
 
