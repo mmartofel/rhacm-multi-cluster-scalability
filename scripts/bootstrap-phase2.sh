@@ -450,6 +450,30 @@ info "NOTE: cloud transaction-processor runs 0 replicas at idle (minReplicaCount
 info "      KEDA scales it up automatically when load exceeds lagThreshold=500 messages."
 info "      This is expected — not a failure."
 
+# Kafka consumer fail-stop resilience (transaction-processor, ledger-service): a
+# deserialization failure (e.g. transient Apicurio/RHSI blip) with no
+# DeserializationFailureHandler permanently kills the Kafka consumer with no
+# self-recovery, since quarkus.messaging.health.enabled=false intentionally
+# disables SmallRye's own liveness signal for it (see CLAUDE.md finding 6). This
+# checks the narrow custom kafka-consumer-channel liveness check that replaces
+# it is actually present and UP — confirming both the RetryingAvroDeserializationFailureHandler
+# and KafkaConsumerLivenessCheck classes made it into the built image, not just
+# that the pod is Running (a pod with a dead consumer still reports 1/1 Ready).
+for ctx in onprem cloud; do
+  for svc in transaction-processor ledger-service; do
+    pod=$(oc get pods -n banking-demo --context "$ctx" -l app="$svc" \
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    if [[ -n "$pod" ]]; then
+      check "$ctx: $svc kafka-consumer-channel healthy" \
+        "oc exec -n banking-demo --context $ctx $pod -- curl -s http://localhost:8080/health/live \
+         | jq -e '.checks[] | select(.name==\"kafka-consumer-channel\") | .status==\"UP\"' >/dev/null"
+    else
+      echo -e "${RED}  ✗${NC} $ctx: $svc kafka-consumer-channel healthy (no pod found)"
+      ((FAIL++)) || true
+    fi
+  done
+done
+
 # Dashboard route — derived at runtime from the deployed Route, not hardcoded
 DASH_HOST=$(oc get route dashboard -n banking-demo --context onprem \
   -o jsonpath='{.spec.host}' 2>/dev/null || true)
