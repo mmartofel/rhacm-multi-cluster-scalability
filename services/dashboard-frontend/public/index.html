@@ -15,6 +15,12 @@
       /* Content area scrolls; header/sidebar/footer do not */
       .pf-v5-c-page__main { overflow: hidden; }
       .pf-v5-c-page__main-section { overflow-y: auto; }
+      /* PatternFly's isFilled section defaults to flex-shrink:0, so it never shrinks back
+         to the available viewport height once content grows past it -- it just grows and
+         lets an ancestor scroll instead. Allow it to shrink so full-height panes actually
+         stretch to fill (rather than always overflow), and fall back to its own scrollbar
+         only if content genuinely can't fit even at minimum size. */
+      .pf-v5-c-page__main-section.pf-m-fill { flex-shrink: 1 !important; }
     </style>
   </head>
   <body style="background:#151515">
