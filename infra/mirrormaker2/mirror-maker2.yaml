@@ -42,6 +42,10 @@ spec:
     # that's actually meant to cross the tunnel.
     topicsPattern: "transactions-raw"
     sourceConnector:
+      # transactions-raw went from 6 to 24 partitions — bump task parallelism
+      # proportionally so MM2 replication throughput doesn't become the new
+      # bottleneck (previously ran on the implicit single-task default).
+      tasksMax: 4
       config:
         replication.factor: "3"
         offset-syncs.topic.replication.factor: "3"

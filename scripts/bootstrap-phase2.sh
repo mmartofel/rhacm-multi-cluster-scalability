@@ -450,6 +450,38 @@ info "NOTE: cloud transaction-processor runs 0 replicas at idle (minReplicaCount
 info "      KEDA scales it up automatically when load exceeds lagThreshold=500 messages."
 info "      This is expected — not a failure."
 
+# OWNED_PARTITIONS must be disjoint 12-partition halves of transactions-raw's 24
+# partitions (onprem 0-11, cloud 12-23) on both transaction-generator and
+# transaction-processor. A stale/mismatched value here (e.g. left over from the
+# pre-2026-09-05 3-per-cluster split) silently caps real per-cluster throughput
+# without any error — see CLAUDE.md "KEDA's Kafka scaler silently caps replicas
+# at the topic's partition count".
+check "onprem: transaction-generator OWNED_PARTITIONS=0-11" \
+  "oc get deployment transaction-generator -n banking-demo --context onprem -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name==\"OWNED_PARTITIONS\")].value}' | grep -q '^0,1,2,3,4,5,6,7,8,9,10,11$'"
+check "onprem: transaction-processor OWNED_PARTITIONS=0-11" \
+  "oc get deployment transaction-processor -n banking-demo --context onprem -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name==\"OWNED_PARTITIONS\")].value}' | grep -q '^0,1,2,3,4,5,6,7,8,9,10,11$'"
+check "cloud: transaction-generator OWNED_PARTITIONS=12-23" \
+  "oc get deployment transaction-generator -n banking-demo --context cloud -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name==\"OWNED_PARTITIONS\")].value}' | grep -q '^12,13,14,15,16,17,18,19,20,21,22,23$'"
+check "cloud: transaction-processor OWNED_PARTITIONS=12-23" \
+  "oc get deployment transaction-processor -n banking-demo --context cloud -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name==\"OWNED_PARTITIONS\")].value}' | grep -q '^12,13,14,15,16,17,18,19,20,21,22,23$'"
+
+# KafkaPartitionStats.PARTITIONS (transaction-processor source) independently hardcodes
+# the loop bound for GET /api/processor/stats/partition-lag — a stale build (e.g. an
+# image that predates the 6->24 partition-count fix) would report the endpoint as
+# healthy while silently only ever returning entries for partitions 0-5. Confirms the
+# actually-built/deployed image, not just that the manifest env vars are correct.
+for ctx in onprem cloud; do
+  pod=$(oc get pods -n banking-demo --context "$ctx" -l app=transaction-processor \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "$pod" ]]; then
+    check "$ctx: transaction-processor partition-lag reports all 24 partitions" \
+      "test \$(oc exec -n banking-demo --context $ctx $pod -- curl -s http://localhost:8080/api/processor/stats/partition-lag | jq 'length') -eq 24"
+  else
+    echo -e "${RED}  ✗${NC} $ctx: transaction-processor partition-lag reports all 24 partitions (no pod found)"
+    ((FAIL++)) || true
+  fi
+done
+
 # Kafka consumer fail-stop resilience (transaction-processor, ledger-service): a
 # deserialization failure (e.g. transient Apicurio/RHSI blip) with no
 # DeserializationFailureHandler permanently kills the Kafka consumer with no

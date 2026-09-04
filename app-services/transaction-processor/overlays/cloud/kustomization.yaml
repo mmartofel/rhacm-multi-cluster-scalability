@@ -15,7 +15,7 @@ patches:
       value: "cloud"
     - op: replace
       path: /spec/template/spec/containers/0/env/3/value
-      value: "3,4,5"
+      value: "12,13,14,15,16,17,18,19,20,21,22,23"
     - op: replace
       path: /spec/template/spec/containers/0/env/5/value
       value: "jdbc:postgresql://postgresql-primary.banking-infra.svc.cluster.local:5432/postgres"

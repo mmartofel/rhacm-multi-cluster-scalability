@@ -354,6 +354,20 @@ check "Kafka topics exist (onprem, count=3)" bash -c \
   "test \$(oc --context ${ONPREM} get kafkatopic -n ${INFRA_NS} \
      --no-headers 2>/dev/null | wc -l) -ge 3"
 
+# transactions-raw is split 12 partitions per cluster via OWNED_PARTITIONS (onprem
+# 0-11, cloud 12-23) — a topic created with fewer partitions (e.g. a stale 6 from
+# before the 2026-09-05 increase) silently caps KEDA's real scaling ceiling at the
+# partition count, well below maxReplicaCount, without any error anywhere. See
+# CLAUDE.md "KEDA's Kafka scaler silently caps replicas at the topic's partition
+# count". Checked on both clusters since each runs its own physical topic.
+check "transactions-raw has 24 partitions (onprem)" bash -c \
+  "oc --context ${ONPREM} get kafkatopic transactions-raw -n ${INFRA_NS} \
+   -o jsonpath='{.spec.partitions}' | grep -q '^24$'"
+
+check "transactions-raw has 24 partitions (cloud)" bash -c \
+  "oc --context ${CLOUD} get kafkatopic transactions-raw -n ${INFRA_NS} \
+   -o jsonpath='{.spec.partitions}' | grep -q '^24$'"
+
 check "PostgreSQL 3/3 Ready (onprem)" bash -c \
   "oc --context ${ONPREM} get postgrescluster postgres -n ${INFRA_NS} \
    -o jsonpath='{.status.instances[0].readyReplicas}' \
@@ -403,10 +417,14 @@ check "MirrorMaker2 replicas=1, not disabled (cloud)" bash -c \
 
 # The KafkaTopic CR existing on cloud is NOT evidence of mirroring — cloud defines
 # transactions-raw locally regardless of MM2 (own generator/processor partitions).
-# The connector task actually being RUNNING is the meaningful signal.
-check "MirrorMaker2 source connector task RUNNING (cloud)" bash -c \
-  "oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
-   -o jsonpath='{.status.connectors[0].tasks[0].state}' | grep -q '^RUNNING$'"
+# The connector tasks actually being RUNNING is the meaningful signal. Checks every
+# task, not just tasks[0] — sourceConnector.tasksMax is 4 (bumped alongside the
+# transactions-raw 6→24 partition increase, see CLAUDE.md), so a single-task check
+# would miss 3 of 4 tasks silently failing.
+check "MirrorMaker2 source connector tasks all RUNNING (cloud)" bash -c \
+  "states=\$(oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
+   -o jsonpath='{.status.connectors[0].tasks[*].state}'); \
+   [ -n \"\${states}\" ] && ! printf '%s\n' \${states} | grep -qv '^RUNNING$'"
 
 # A wildcard pattern like "transactions-.*" also mirrors transactions-committed —
 # LedgerUpdater has no partition-ownership filter or idempotency check (unlike

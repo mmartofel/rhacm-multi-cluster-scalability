@@ -205,7 +205,7 @@ interface PartitionMapProps {
 }
 
 function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
-  const onpremCount = Math.round(6 * onpremWeight / 100);
+  const onpremCount = Math.round(24 * onpremWeight / 100);
 
   // Build maps from actual runtime partition data
   const lagMap   = new Map<number, number>();
@@ -229,7 +229,7 @@ function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
         Kafka Partitions — transactions-raw
       </div>
       <div style={{ display: 'flex', gap: 8, flex: 1, minHeight: 0 }}>
-        {Array.from({ length: 6 }, (_, p) => {
+        {Array.from({ length: 24 }, (_, p) => {
           // Colour: use actual runtime ownership when available, fall back to slider estimate
           const isOnpremEstimate = p < onpremCount;
           const color = ownerMap.size > 0

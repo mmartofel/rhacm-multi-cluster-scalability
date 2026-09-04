@@ -76,7 +76,7 @@ public class TransactionProcessor {
     private final String sourceCluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
 
     private final AtomicReference<Set<Integer>> ownedPartitions = new AtomicReference<>(
-            parseOwnedPartitions(System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5")));
+            parseOwnedPartitions(System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23")));
 
     private final ConcurrentHashMap<String, Long> accountVersionCache = new ConcurrentHashMap<>();
 

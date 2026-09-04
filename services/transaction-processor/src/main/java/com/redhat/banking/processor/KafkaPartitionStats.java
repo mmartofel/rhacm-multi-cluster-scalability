@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class KafkaPartitionStats {
 
     private static final String TOPIC = "transactions-raw";
-    private static final int PARTITIONS = 6;
+    private static final int PARTITIONS = 24;
 
     @Inject
     TransactionProcessor processor;

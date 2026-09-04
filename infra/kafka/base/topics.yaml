@@ -6,12 +6,12 @@ metadata:
   labels:
     strimzi.io/cluster: banking-kafka
 spec:
-  partitions: 6
+  partitions: 24
   replicas: 3
   config:
     retention.ms: "7200000"
-    retention.bytes: "524288000"
-    segment.bytes: "134217728"
+    retention.bytes: "134217728"
+    segment.bytes: "33554432"
     min.insync.replicas: "2"
 ---
 apiVersion: kafka.strimzi.io/v1beta2
