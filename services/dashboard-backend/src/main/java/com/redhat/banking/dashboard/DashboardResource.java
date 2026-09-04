@@ -131,4 +131,38 @@ public class DashboardResource {
             return false;
         }
     }
+
+    // Link-failure chaos control — only ever proxies to cloud, since the
+    // onprem-link-token Secret (banking-infra) only exists there (onprem issues the
+    // AccessGrant, cloud redeems it into this Secret).
+    @PUT
+    @Path("/link/break")
+    public Response breakLink() {
+        ProxyResult r = httpPutForBody(cloudGatewayUrl + "/api/gateway/link/break");
+        return Response.status(r.status()).entity(r.body()).build();
+    }
+
+    @PUT
+    @Path("/link/restore")
+    public Response restoreLink() {
+        ProxyResult r = httpPutForBody(cloudGatewayUrl + "/api/gateway/link/restore");
+        return Response.status(r.status()).entity(r.body()).build();
+    }
+
+    private record ProxyResult(int status, String body) {}
+
+    private ProxyResult httpPutForBody(String url) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofMillis(800))
+                    .PUT(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+            return new ProxyResult(resp.statusCode(), resp.body());
+        } catch (Exception e) {
+            return new ProxyResult(502, "{\"status\":\"unknown\",\"error\":\"gateway unreachable\"}");
+        }
+    }
 }

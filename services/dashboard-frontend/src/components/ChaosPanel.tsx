@@ -84,7 +84,7 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
   const cloudPct  = 100 - current.onpremWeight;
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16, height: '100%' }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
       <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 14 }}>Traffic & Chaos Control</div>
 
       {/* Current split indicator — live from cluster */}
@@ -188,15 +188,6 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         >
           Check Gateway Health
         </button>
-      </div>
-
-      <div style={{ borderTop: '1px solid #2a2d32', paddingTop: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#8a8d90', marginBottom: 6 }}>Simulate link failure</div>
-        <div style={{ fontSize: 11, color: '#6a6e73', lineHeight: 1.7 }}>
-          Delete the <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>skupper-link</code> Secret
-          on Cloud to sever the RHSI tunnel. MM2 pauses, Cloud processor circuit-breaker opens.
-          On-Prem continues unaffected. Re-apply the link token to recover.
-        </div>
       </div>
     </div>
   );

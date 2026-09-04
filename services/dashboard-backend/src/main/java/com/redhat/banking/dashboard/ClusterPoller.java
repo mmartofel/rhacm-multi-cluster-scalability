@@ -54,7 +54,9 @@ public class ClusterPoller {
         metrics.add(pollCluster("onprem", onpremGatewayUrl, onpremLedgerUrl, intervalSecs));
         metrics.add(pollCluster("cloud", cloudGatewayUrl, cloudLedgerUrl, intervalSecs));
 
-        MetricsPayload payload = new MetricsPayload(metrics, nowMs, dashboardResource.getOnpremCapacityTps());
+        String interconnectStatus = fetchLinkStatus();
+
+        MetricsPayload payload = new MetricsPayload(metrics, nowMs, dashboardResource.getOnpremCapacityTps(), interconnectStatus);
         try {
             broadcaster.publish(mapper.writeValueAsString(payload));
         } catch (Exception e) {
@@ -127,6 +129,16 @@ public class ClusterPoller {
         }
 
         return m;
+    }
+
+    private String fetchLinkStatus() {
+        try {
+            String json = httpGet(cloudGatewayUrl + "/api/gateway/link/status");
+            JsonNode node = mapper.readTree(json);
+            return node.path("status").asText("unknown");
+        } catch (Exception e) {
+            return "unknown";
+        }
     }
 
     private String httpGet(String url) throws Exception {

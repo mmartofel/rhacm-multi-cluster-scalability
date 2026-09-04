@@ -14,6 +14,7 @@ import ThroughputChart from './components/ThroughputChart';
 import ClusterCards from './components/ClusterCards';
 import LoadControlPanel from './components/LoadControlPanel';
 import ChaosPanel from './components/ChaosPanel';
+import LinkFailurePanel from './components/LinkFailurePanel';
 import ComplianceWidget from './components/ComplianceWidget';
 import AutoscaleWatchPanel from './components/AutoscaleWatchPanel';
 
@@ -137,7 +138,12 @@ export default function App() {
       case 'load-control':
         return <LoadControlPanel payload={payload} />;
       case 'chaos':
-        return <ChaosPanel payload={payload} processingMode={processingMode} />;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <ChaosPanel payload={payload} processingMode={processingMode} />
+            <LinkFailurePanel payload={payload} />
+          </div>
+        );
       case 'compliance':
         return <ComplianceWidget />;
       case 'autoscale':

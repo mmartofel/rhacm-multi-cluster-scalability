@@ -61,11 +61,15 @@ Cross-cluster connectivity is provided by **Red Hat Service Interconnect (RHSI)*
 
 ### Chaos Scenario: RHSI Link Partition
 
-When the cross-cluster link is severed (delete `skupper-link` Secret on cloud):
+When the cross-cluster link is severed (delete the **`onprem-link-token`** Secret in `banking-infra` on cloud — **not** `skupper-link`; confirmed live, see note below):
 - MM2 pauses replication; events buffer in onprem Kafka (no data loss)
 - cloud processor circuit-breaker opens on JDBC failure; events remain in cloud Kafka
 - onprem continues processing 100% of committed transactions unaffected
 - On recovery (re-apply link token): MM2 drains lag, cloud processor reconnects and commits backlog
+
+The dashboard's "Traffic & Chaos" page exercises this for real via `LinkFailurePanel.tsx` → `PUT /api/backend/link/break|restore` (dashboard-backend) → `PUT /api/gateway/link/break|restore` (cloud `cluster-gateway`, `LinkResource.java`, fabric8 `KubernetesClient`). `cluster-gateway` caches the live Secret in memory immediately before deleting it and recreates it verbatim on restore; if its pod restarts in between, the cache is lost and restore returns HTTP 409 (`no-cached-secret`) — the documented manual fallback is re-running the AccessGrant/AccessToken exchange (`bootstrap-phase1.sh` Step 6). RBAC for this (`get`/`delete` on the named secret, `create` on secrets, namespace `banking-infra`) is added only in `app-services/cluster-gateway/overlays/cloud/rbac-link.yaml` — onprem never gets it, since the Secret never exists there.
+
+**The link-credential Secret is named `onprem-link-token`, not `skupper-link` — confirmed live, `bootstrap-phase1.sh` Step 6 is the source of truth:** The AccessToken CR applied on cloud is a fixed literal `metadata.name: onprem-link-token` (`scripts/bootstrap-phase1.sh:237`), not environment-generated — this holds across test runs regardless of which provider onprem/cloud land on. Skupper redeems it into a `kubernetes.io/tls` Secret of the *same* name (`oc get secret onprem-link-token -n banking-infra --context cloud`), referenced by the `Link` CR's `spec.tlsCredentials` (also named `onprem-link-token` in this repo's naming, `oc get link.skupper.io onprem-link-token -n banking-infra --context cloud`). There is no `skupper-link` object anywhere in the cluster — that name was inaccurate shorthand in this file's earlier prose, discovered when `LinkResource.java`'s first implementation hardcoded it and `oc get secret skupper-link` came back `NotFound` even though the link was actually up and healthy (`Link` status `Ready`, `SITES IN NETWORK: 2`).
 
 ## Diagram Rendering
 

@@ -29,4 +29,5 @@ export interface MetricsPayload {
   clusters: ClusterMetrics[];
   snapshotAt: number;
   onpremCapacityTps: number;
+  interconnectStatus: 'active' | 'broken' | 'unknown';
 }
