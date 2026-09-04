@@ -253,17 +253,24 @@ wait_for_jsonpath "skupper link (cloud)" 300 \
 ok "Skupper cross-cluster link operational"
 
 # ── Step 7: Apply Skupper connectors and listeners ────────────────────────
-log "Step 7: Expose kafka-bootstrap and postgresql-primary via Skupper"
+log "Step 7: Expose kafka-bootstrap, postgresql-primary, apicurio-registry, and the MM2 tunnel via Skupper"
+# connectors.yaml/listeners.yaml also carry the dedicated MirrorMaker2 tunnel
+# (kafka-bootstrap-mm2 + one per broker, port 9094) — see the advertised-listener
+# note in this file's "MirrorMaker 2 needs its own dedicated listener/tunnel"
+# section. It exists as a SEPARATE tunnel from kafka-bootstrap:9092 specifically
+# because the plain/tls listeners' advertised addresses collide with cloud's own
+# identically-named Kafka cluster; nothing else needs to change to pick this up
+# since it's applied here from the same files as everything else.
 
 oc --context "${ONPREM}" apply \
   -f "${REPO_ROOT}/infra/skupper/onprem/connectors.yaml" \
   -n "${INFRA_NS}"
-ok "Skupper Connectors applied on onprem (kafka-bootstrap, postgresql-primary)"
+ok "Skupper Connectors applied on onprem (kafka-bootstrap, postgresql-primary, apicurio-registry, kafka-bootstrap-mm2, banking-kafka-broker-{0,1,2}-mm2)"
 
 oc --context "${CLOUD}" apply \
   -f "${REPO_ROOT}/infra/skupper/cloud/listeners.yaml" \
   -n "${INFRA_NS}"
-ok "Skupper Listeners applied on cloud (kafka-bootstrap, postgresql-primary)"
+ok "Skupper Listeners applied on cloud (kafka-bootstrap, postgresql-primary, apicurio-registry, kafka-bootstrap-mm2, banking-kafka-broker-{0,1,2}-mm2)"
 
 # ── Step 8: Wait for PostgreSQL on cloud ─────────────────────────────────
 log "Step 8: Waiting for PostgreSQL on cloud (up to 10 min)"
@@ -363,22 +370,43 @@ check "Skupper link Ready (cloud)" bash -c \
    -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' \
    | grep -q '^True$'"
 
-check "Skupper Listeners present (cloud, count=2)" bash -c \
+check "Skupper Listeners present (cloud, count=7)" bash -c \
   "test \$(oc --context ${CLOUD} get listeners.skupper.io -n ${INFRA_NS} \
-     --no-headers 2>/dev/null | wc -l) -ge 2"
+     --no-headers 2>/dev/null | wc -l) -ge 7"
+
+check "Skupper MM2 tunnel Ready (cloud, all 4 listeners)" bash -c \
+  "test \$(oc --context ${CLOUD} get listeners.skupper.io -n ${INFRA_NS} \
+     --no-headers 2>/dev/null | grep 'mm2' | grep -c 'Ready') -ge 4"
 
 check "Apicurio Registry Ready (onprem)" bash -c \
   "oc --context ${ONPREM} get deployment apicurio-registry -n ${INFRA_NS} \
    -o jsonpath='{.status.readyReplicas}' | grep -q '^1$'"
+
+# Kafka's "mm2" listener (advertisedHostTemplate override, see kafka.yaml) is what
+# makes MM2's tunnel collision-free — without it, MM2 silently self-replicates on
+# cloud's own Kafka instead of mirroring onprem's (see CLAUDE.md Phase 1 notes).
+check "Kafka mm2 listener configured (onprem)" bash -c \
+  "test -n \"\$(oc --context ${ONPREM} get kafka banking-kafka -n ${INFRA_NS} \
+   -o jsonpath='{.status.listeners[?(@.name==\"mm2\")].bootstrapServers}')\""
 
 check "MirrorMaker2 Ready (cloud)" bash -c \
   "oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
    -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' \
    | grep -q '^True$'"
 
-check "Mirror topic replicated (cloud)" bash -c \
-  "oc --context ${CLOUD} get kafkatopic -n ${INFRA_NS} \
-   --no-headers 2>/dev/null | grep -q 'transactions-raw'"
+# "Ready" alone is not sufficient — this CR reports Ready:True even at replicas:0
+# (i.e. completely disabled), which is exactly the regression that went unnoticed
+# for months (see CLAUDE.md Phase 1 notes). Check the actual running replica count.
+check "MirrorMaker2 replicas=1, not disabled (cloud)" bash -c \
+  "oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
+   -o jsonpath='{.status.replicas}' | grep -q '^1$'"
+
+# The KafkaTopic CR existing on cloud is NOT evidence of mirroring — cloud defines
+# transactions-raw locally regardless of MM2 (own generator/processor partitions).
+# The connector task actually being RUNNING is the meaningful signal.
+check "MirrorMaker2 source connector task RUNNING (cloud)" bash -c \
+  "oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
+   -o jsonpath='{.status.connectors[0].tasks[0].state}' | grep -q '^RUNNING$'"
 
 printf '\n'
 if (( FAIL == 0 )); then
