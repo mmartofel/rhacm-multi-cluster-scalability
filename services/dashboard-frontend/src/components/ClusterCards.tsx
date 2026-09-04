@@ -32,60 +32,65 @@ function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
       border: `1px solid ${accent}33`,
       borderTop: `3px solid ${accent}`,
       borderRadius: 8,
-      padding: 16,
+      padding: 20,
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: 14 }}>{label}</span>
+            <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: 16 }}>{label}</span>
             <span style={{
-              fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 10,
+              fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
               background: `${roleBadge.color}22`, color: roleBadge.color, border: `1px solid ${roleBadge.color}55`,
             }}>
               {roleBadge.text}
             </span>
           </div>
-          <div style={{ fontSize: 11, color: '#8a8d90', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: '#8a8d90', marginTop: 4 }}>
             {isOnprem ? 'Record-of-truth · Primary DB · Kafka source' : 'Cloud burst · KEDA 1–20 replicas'}
           </div>
         </div>
-        <span style={{ fontSize: 11, color: healthColor, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: healthColor, display: 'inline-block' }} />
+        <span style={{ fontSize: 12, color: healthColor, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: healthColor, display: 'inline-block' }} />
           {m.healthy ? 'Healthy' : 'Degraded'}
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 20px' }}>
         <div>
-          <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 2 }}>Throughput</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
-            {fmt(tpm)} <span style={{ fontSize: 11, fontWeight: 400, color: '#8a8d90' }}>TPM</span>
+          <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 4 }}>Throughput</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
+            {fmt(tpm)} <span style={{ fontSize: 12, fontWeight: 400, color: '#8a8d90' }}>TPM</span>
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 2 }}>Committed TPS</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
+          <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 4 }}>Committed TPS</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
             {fmt(committedTps, 1)}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 2 }}>Ledger entries</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
-            {ledger > 0 ? fmt(ledger) : <span style={{ color: '#6a6e73', fontSize: 13, fontWeight: 400 }}>—</span>}
+          <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 4 }}>Ledger entries</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
+            {ledger > 0 ? fmt(ledger) : <span style={{ color: '#6a6e73', fontSize: 15, fontWeight: 400 }}>—</span>}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 2 }}>Committed (session)</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
-            {sinceStat > 0 ? fmt(sinceStat) : <span style={{ color: '#6a6e73', fontSize: 13, fontWeight: 400 }}>—</span>}
+          <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 4 }}>Committed (session)</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums' }}>
+            {sinceStat > 0 ? fmt(sinceStat) : <span style={{ color: '#6a6e73', fontSize: 15, fontWeight: 400 }}>—</span>}
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 11, color: '#6a6e73' }}>Rejected (DLQ)</div>
+      <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 12, color: '#6a6e73' }}>Rejected (DLQ)</div>
         <span style={{
-          fontSize: 12, fontWeight: 700,
+          fontSize: 14, fontWeight: 700,
           color: rejected > 0 ? '#c9190b' : '#6a6e73',
           fontVariantNumeric: 'tabular-nums',
         }}>
@@ -93,13 +98,13 @@ function ClusterCard({ m, isBurst }: { m: ClusterMetrics; isBurst: boolean }) {
         </span>
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: '#6a6e73' }}>Traffic weight</span>
-          <span style={{ fontSize: 11, color: accent, fontWeight: 600 }}>{m.trafficWeight}%</span>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: '#6a6e73' }}>Traffic weight</span>
+          <span style={{ fontSize: 12, color: accent, fontWeight: 600 }}>{m.trafficWeight}%</span>
         </div>
-        <div style={{ height: 5, background: '#2a2d32', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${m.trafficWeight}%`, background: accent, borderRadius: 3, transition: 'width 0.4s ease' }} />
+        <div style={{ height: 7, background: '#2a2d32', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${m.trafficWeight}%`, background: accent, borderRadius: 4, transition: 'width 0.4s ease' }} />
         </div>
       </div>
     </div>
@@ -110,10 +115,10 @@ export default function ClusterCards({ payload, capacityTps = ONPREM_CAPACITY_TP
   const genTps = payload?.clusters.find(c => c.cluster === 'onprem')?.generatorTps ?? 0;
   const isBurst = genTps > capacityTps;
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16, flex: 1 }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 14 }}>Cluster Status</div>
       {payload ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
           {payload.clusters.map(m => <ClusterCard key={m.cluster} m={m} isBurst={isBurst} />)}
         </div>
       ) : (

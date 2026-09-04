@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React from 'react';
 import { Chart, ChartLine, ChartAxis, ChartGroup, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { AutoscalePoint } from '../App';
 import { MetricsPayload } from '../types/metrics';
@@ -9,6 +9,7 @@ interface Props {
 }
 
 import { ONPREM_COLOR, CLOUD_COLOR, DARK_AXIS } from '../colors';
+import { useElementSize } from '../hooks/useElementSize';
 
 const SCALER_CONFIG = {
   processor: {
@@ -47,14 +48,14 @@ function ReplicaKpi({ label, clusterLabel, current, min, max, accent }: {
       border: `1px solid ${accent}55`,
       borderTop: `3px solid ${accent}`,
       borderRadius: 8,
-      padding: '10px 14px',
+      padding: '16px 18px',
     }}>
-      <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 2 }}>{clusterLabel}</div>
-      <div style={{ fontSize: 11, color: '#8a8d90', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+      <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 4 }}>{clusterLabel}</div>
+      <div style={{ fontSize: 12, color: '#8a8d90', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 34, fontWeight: 700, color: '#f0f0f0', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
         {current >= 0 ? current : '—'}
       </div>
-      <div style={{ fontSize: 11, color: '#6a6e73', marginTop: 4 }}>min {min} / max {max}</div>
+      <div style={{ fontSize: 12, color: '#6a6e73', marginTop: 8 }}>min {min} / max {max}</div>
     </div>
   );
 }
@@ -69,49 +70,52 @@ function ScalerBreakdownCard() {
     }}>{text}</span>
   );
   const row = (cluster: string, min: number, max: number, accent: string) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
       <span style={{ color: '#8a8d90' }}>{cluster}</span>
       <span style={{ color: accent, fontWeight: 600 }}>{min} – {max} replicas</span>
     </div>
   );
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
-      <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 14 }}>
+    <div style={{
+      background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20,
+      flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    }}>
+      <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 20 }}>
         Autoscaling Breakdown
       </div>
 
       {/* KEDA */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
           {badge(processor.label, processor.labelColor)}
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#f0f0f0' }}>{processor.title}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#f0f0f0' }}>{processor.title}</span>
         </div>
-        <div style={{ fontSize: 11, color: '#8a8d90', lineHeight: 1.6, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: '#8a8d90', lineHeight: 1.7, marginBottom: 12 }}>
           {processor.description}
         </div>
-        <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 6 }}>
+        <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 10 }}>
           Trigger: <span style={{ color: processor.labelColor }}>{processor.trigger}</span>
         </div>
-        <div style={{ background: '#151515', borderRadius: 6, padding: '8px 10px' }}>
+        <div style={{ background: '#151515', borderRadius: 6, padding: '12px 14px' }}>
           {row('On-Prem', processor.onpremMin, processor.onpremMax, ONPREM_COLOR)}
           {row('Cloud', processor.cloudMin, processor.cloudMax, CLOUD_COLOR)}
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid #2a2d32', paddingTop: 14 }}>
+      <div style={{ borderTop: '1px solid #2a2d32', paddingTop: 20, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         {/* HPA */}
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
           {badge(account.label, account.labelColor)}
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#f0f0f0' }}>{account.title}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#f0f0f0' }}>{account.title}</span>
         </div>
-        <div style={{ fontSize: 11, color: '#8a8d90', lineHeight: 1.6, marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: '#8a8d90', lineHeight: 1.7, marginBottom: 12 }}>
           {account.description}
         </div>
-        <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 6 }}>
+        <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 10 }}>
           Trigger: <span style={{ color: account.labelColor }}>{account.trigger}</span>
         </div>
-        <div style={{ background: '#151515', borderRadius: 6, padding: '8px 10px' }}>
+        <div style={{ background: '#151515', borderRadius: 6, padding: '12px 14px' }}>
           {row('On-Prem', account.onpremMin, account.onpremMax, ONPREM_COLOR)}
           {row('Cloud', account.cloudMin, account.cloudMax, CLOUD_COLOR)}
         </div>
@@ -129,16 +133,8 @@ function ReplicaChart({ history, title, subtitle, onpremKey, cloudKey, minRef, m
   minRef: number;
   maxRef: number;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [chartWidth, setChartWidth] = useState(600);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(entries =>
-      setChartWidth(Math.floor(entries[0].contentRect.width) - 2));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  const [containerRef, { width: chartWidth, height: rawHeight }] = useElementSize<HTMLDivElement>({ width: 600, height: 185 });
+  const chartHeight = Math.max(140, rawHeight);
 
   // Filter out -1 (unknown) points — show as gap
   const onpremData = history
@@ -156,7 +152,7 @@ function ReplicaChart({ history, title, subtitle, onpremKey, cloudKey, minRef, m
     : maxRef;
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '14px 8px 4px' }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '14px 8px 4px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 12px 2px' }}>
         <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 13 }}>{title}</span>
         <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
@@ -165,15 +161,15 @@ function ReplicaChart({ history, title, subtitle, onpremKey, cloudKey, minRef, m
         </div>
       </div>
       <div style={{ padding: '0 12px 8px', fontSize: 11, color: '#6a6e73' }}>{subtitle}</div>
-      <div ref={containerRef}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }}>
         {history.length < 2 ? (
-          <div style={{ height: 185, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
             Collecting data…
           </div>
         ) : (
           <Chart
             width={chartWidth}
-            height={185}
+            height={chartHeight}
             padding={{ bottom: 38, left: 48, right: 16, top: 6 }}
             minDomain={{ y: 0 }}
             maxDomain={{ y: maxY + 1 }}
@@ -245,9 +241,9 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
   const { processor, account } = SCALER_CONFIG;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, alignItems: 'stretch', height: '100%' }}>
       {/* Left: charts */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0 }}>
         <ReplicaChart
           history={history}
           title="Transaction Processor Replicas"
@@ -269,7 +265,7 @@ export default function AutoscaleWatchPanel({ history, payload }: Props) {
       </div>
 
       {/* Right: KPIs + breakdown */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0 }}>
         {/* Live replica KPI tiles */}
         <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 14 }}>
           <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 12 }}>Live Replica Counts</div>

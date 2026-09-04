@@ -117,20 +117,20 @@ export default function App() {
     switch (activeView) {
       case 'overview':
         return (
-          <Grid hasGutter>
+          <Grid hasGutter style={{ height: '100%', gridTemplateRows: 'auto 1fr' }}>
             <GridItem span={12}>
               <KpiStrip payload={payload} processingMode={processingMode} capacityTps={capacityTps} />
             </GridItem>
-            <GridItem lg={8} span={12} style={{ display: 'flex' }}>
-              <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '12px 12px 8px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <GridItem lg={8} span={12} style={{ display: 'flex', minHeight: 0 }}>
+              <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '12px 12px 8px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 12 }}>Transactions</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
                   <TpmChart history={tpmHistory.current} capacityTps={capacityTps} />
                   <ThroughputChart history={throughputHistory.current} capacityTps={capacityTps} />
                 </div>
               </div>
             </GridItem>
-            <GridItem lg={4} span={12} style={{ display: 'flex', flexDirection: 'column' }}>
+            <GridItem lg={4} span={12} style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <ClusterCards payload={payload} capacityTps={capacityTps} />
             </GridItem>
           </Grid>
@@ -139,7 +139,7 @@ export default function App() {
         return <LoadControlPanel payload={payload} />;
       case 'chaos':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', minHeight: 0 }}>
             <ChaosPanel payload={payload} processingMode={processingMode} />
             <LinkFailurePanel payload={payload} />
           </div>

@@ -1,21 +1,15 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React from 'react';
 import { Chart, ChartLine, ChartAxis, ChartGroup, ChartVoronoiContainer } from '@patternfly/react-charts';
 import { ThroughputPoint } from '../App';
 import { ONPREM_CAPACITY_TPS } from '../types/metrics';
 import { ONPREM_COLOR, CLOUD_COLOR, GEN_COLOR, DARK_AXIS } from '../colors';
+import { useElementSize } from '../hooks/useElementSize';
 
 interface Props { history: ThroughputPoint[]; capacityTps?: number; }
 
 export default function ThroughputChart({ history, capacityTps = ONPREM_CAPACITY_TPS }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [chartWidth, setChartWidth] = useState(560);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(entries => setChartWidth(Math.floor(entries[0].contentRect.width) - 2));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  const [containerRef, { width: chartWidth, height: rawHeight }] = useElementSize<HTMLDivElement>({ width: 560, height: 195 });
+  const chartHeight = Math.max(150, rawHeight);
 
   const isEstimated = history.length > 0 && history[history.length - 1].estimated;
   const maxY = history.length > 0
@@ -23,7 +17,7 @@ export default function ThroughputChart({ history, capacityTps = ONPREM_CAPACITY
     : capacityTps;
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px' }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '16px 8px 4px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 12px 4px' }}>
         <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 14 }}>Processing Throughput Analysis</span>
         <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
@@ -39,15 +33,15 @@ export default function ThroughputChart({ history, capacityTps = ONPREM_CAPACITY
           <span style={{ color: '#f4c14580', fontStyle: 'italic' }}>Commit lines estimated from traffic weights · real data when ledger active</span>
         )}
       </div>
-      <div ref={containerRef}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }}>
         {history.length < 2 ? (
-          <div style={{ height: 195, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
             Collecting data…
           </div>
         ) : (
           <Chart
             width={chartWidth}
-            height={195}
+            height={chartHeight}
             padding={{ bottom: 40, left: 62, right: 16, top: 6 }}
             minDomain={{ y: 0 }}
             maxDomain={{ y: maxY * 1.15 }}

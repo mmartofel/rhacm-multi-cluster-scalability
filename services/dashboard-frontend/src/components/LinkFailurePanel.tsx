@@ -56,9 +56,9 @@ export default function LinkFailurePanel({ payload }: Props) {
   };
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0' }}>Simulate Link Failure</div>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ fontWeight: 600, fontSize: 16, color: '#f0f0f0' }}>Simulate Link Failure</div>
         <button
           onClick={handleToggle}
           disabled={pending || status === 'unknown'}
@@ -74,8 +74,8 @@ export default function LinkFailurePanel({ payload }: Props) {
         </button>
       </div>
 
-      <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 14, lineHeight: 1.6 }}>
-        Deletes (or recreates) the <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>kafka-bootstrap</code>, <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>postgresql-primary</code>, and <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>apicurio-registry</code> Skupper Listeners
+      <div style={{ fontSize: 13, color: '#8a8d90', marginBottom: 18, lineHeight: 1.7 }}>
+        Deletes (or recreates) the <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>kafka-bootstrap</code>, <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>postgresql-primary</code>, and <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>apicurio-registry</code> Skupper Listeners
         on Cloud — a real RHSI outage for those services. MM2 pauses, Cloud's processor rejects transactions to the DLQ, On-Prem continues unaffected.
       </div>
 
@@ -90,20 +90,20 @@ export default function LinkFailurePanel({ payload }: Props) {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 20, flex: 1, minHeight: 0 }}>
         <ClusterBox label="On-Prem" sub="Record-of-truth" accent={ONPREM_COLOR} healthy={status !== 'unknown'} />
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 80 }}>
-          <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
-            <line x1="4" y1="20" x2="196" y2="20" stroke={color} strokeWidth={3} strokeLinecap="round" />
+          <svg width="100%" height="100%" viewBox="0 0 200 80" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+            <line x1="4" y1="40" x2="196" y2="40" stroke={color} strokeWidth={4} strokeLinecap="round" />
             {active && [0, 1, 2].map(i => (
-              <circle key={i} r={4} fill={CLOUD_COLOR}>
-                <animateMotion dur="2s" repeatCount="indefinite" begin={`${i * 0.66}s`} path="M4,20 L196,20" />
+              <circle key={i} r={6} fill={CLOUD_COLOR}>
+                <animateMotion dur="2s" repeatCount="indefinite" begin={`${i * 0.66}s`} path="M4,40 L196,40" />
               </circle>
             ))}
             {active && [0, 1].map(i => (
-              <circle key={`r${i}`} r={3} fill={ONPREM_COLOR}>
-                <animateMotion dur="2.4s" repeatCount="indefinite" begin={`${i * 1.2}s`} path="M196,20 L4,20" />
+              <circle key={`r${i}`} r={5} fill={ONPREM_COLOR}>
+                <animateMotion dur="2.4s" repeatCount="indefinite" begin={`${i * 1.2}s`} path="M196,40 L4,40" />
               </circle>
             ))}
           </svg>
@@ -123,17 +123,17 @@ function ClusterBox({ label, sub, accent, healthy }: { label: string; sub: strin
       border: `1px solid ${accent}33`,
       borderTop: `3px solid ${accent}`,
       borderRadius: 8,
-      padding: '12px 16px',
-      minWidth: 120,
+      padding: '20px 24px',
+      minWidth: 160,
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
-        <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: 13 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
+        <span style={{ fontWeight: 700, color: '#f0f0f0', fontSize: 16 }}>{label}</span>
       </div>
-      <span style={{ fontSize: 10, color: '#8a8d90', marginTop: 2 }}>{sub}</span>
+      <span style={{ fontSize: 12, color: '#8a8d90', marginTop: 4 }}>{sub}</span>
     </div>
   );
 }

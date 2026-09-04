@@ -84,8 +84,8 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
   const cloudPct  = 100 - current.onpremWeight;
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
-      <div style={{ fontWeight: 600, fontSize: 14, color: '#f0f0f0', marginBottom: 14 }}>Traffic & Chaos Control</div>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20, flex: '1.6', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ fontWeight: 600, fontSize: 16, color: '#f0f0f0', marginBottom: 18 }}>Traffic & Chaos Control</div>
 
       {/* Current split indicator — live from cluster */}
       <div style={{ background: '#151515', border: '1px solid #2a2d32', borderRadius: 6, padding: '10px 12px', marginBottom: 14 }}>
@@ -165,7 +165,7 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
       <PartitionMap onpremWeight={onpremWeight ?? current.onpremWeight} payload={payload} />
 
       {/* Gateway health check */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginTop: 16 }}>
         <button
           onClick={async () => {
             setPending(true);
@@ -224,11 +224,11 @@ function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
   const maxLag = hasLag ? Math.max(1, ...Array.from(lagMap.values())) : 1;
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <div style={{ marginBottom: 16, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ fontSize: 12, color: '#6a6e73', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Kafka Partitions — transactions-raw
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 8, flex: 1, minHeight: 0 }}>
         {Array.from({ length: 6 }, (_, p) => {
           // Colour: use actual runtime ownership when available, fall back to slider estimate
           const isOnpremEstimate = p < onpremCount;
@@ -241,19 +241,19 @@ function PartitionMap({ onpremWeight, payload }: PartitionMapProps) {
           const lag     = lagMap.get(p);
           const fillPct = hasLag ? Math.max(4, Math.round((lag ?? 0) / maxLag * 100)) : 30;
           return (
-            <div key={p} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div key={p} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               {/* Lag label above bar */}
-              <span style={{ fontSize: 10, color: hasLag ? color : '#4a4d52', fontWeight: 600, minHeight: 14 }}>
+              <span style={{ fontSize: 12, color: hasLag ? color : '#4a4d52', fontWeight: 600, minHeight: 16 }}>
                 {hasLag ? formatLag(lag ?? 0) : '—'}
               </span>
               {/* Bar */}
-              <div style={{ width: '100%', height: 48, background: '#2a2d32', borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <div style={{ width: '100%', flex: 1, minHeight: 0, background: '#2a2d32', borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                 <div style={{ width: '100%', height: `${fillPct}%`, background: color, borderRadius: 4, opacity: hasLag ? 1 : 0.35, transition: 'height 0.4s ease, background 0.3s ease' }} />
               </div>
               {/* Partition number */}
-              <span style={{ fontSize: 10, color: color, fontWeight: 700 }}>{p}</span>
+              <span style={{ fontSize: 12, color: color, fontWeight: 700 }}>{p}</span>
               {/* Cluster label */}
-              <span style={{ fontSize: 9, color: '#6a6e73' }}>{clusterLabel}</span>
+              <span style={{ fontSize: 11, color: '#6a6e73' }}>{clusterLabel}</span>
             </div>
           );
         })}
