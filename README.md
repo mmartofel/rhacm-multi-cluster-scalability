@@ -121,7 +121,7 @@ This is local basic-auth login only (username `admin`) — RHACS is not configur
 oc --context onprem get route dashboard -n banking-demo -o jsonpath='https://{.spec.host}{"\n"}'
 ```
 
-The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & Chaos** page has a Load Control panel (TPS / traffic-split) and a "Simulate Link Failure" control that performs a *real* RHSI chaos action — toggling it deletes or recreates the actual `onprem-link-token` Secret on `cloud` (via `cluster-gateway`'s scoped Kubernetes RBAC), severing or restoring the cross-cluster link so you can watch MirrorMaker 2 pause, the cloud processor's circuit breaker open, and `onprem` keep processing unaffected. See [`CLAUDE.md`](CLAUDE.md#chaos-scenario-rhsi-link-partition) for the mechanism and manual recovery steps if the link needs to be restored outside the UI.
+The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & Chaos** page has a Load Control panel (TPS / traffic-split) and a "Simulate Link Failure" control that performs a *real* RHSI chaos action — toggling it deletes or recreates the `kafka-bootstrap`/`postgresql-primary`/`apicurio-registry` Skupper Listeners on `cloud` (via `cluster-gateway`'s scoped Kubernetes RBAC), cutting off or restoring `cloud`'s access to onprem's Kafka/PostgreSQL/Apicurio so you can watch MirrorMaker 2 pause, the cloud processor start rejecting transactions to the DLQ, and `onprem` keep processing unaffected — all while the dashboard itself stays fully responsive, since it reaches `cloud` over a separate RHSI channel these Listeners don't touch. See [`CLAUDE.md`](CLAUDE.md#chaos-scenario-rhsi-link-partition) for the mechanism.
 
 ## Verifying the install
 
