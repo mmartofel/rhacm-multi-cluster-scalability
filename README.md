@@ -121,7 +121,7 @@ This is local basic-auth login only (username `admin`) — RHACS is not configur
 oc --context onprem get route dashboard -n banking-demo -o jsonpath='https://{.spec.host}{"\n"}'
 ```
 
-The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & Chaos** page has a Load Control panel (TPS / traffic-split) and a "Simulate Link Failure" control that performs a *real* RHSI chaos action — toggling it deletes or recreates the `kafka-bootstrap`/`postgresql-primary`/`apicurio-registry` Skupper Listeners on `cloud` (via `cluster-gateway`'s scoped Kubernetes RBAC), cutting off or restoring `cloud`'s access to onprem's Kafka/PostgreSQL/Apicurio so you can watch MirrorMaker 2 pause, the cloud processor start rejecting transactions to the DLQ, and `onprem` keep processing unaffected — all while the dashboard itself stays fully responsive, since it reaches `cloud` over a separate RHSI channel these Listeners don't touch. See [`CLAUDE.md`](CLAUDE.md#chaos-scenario-rhsi-link-partition) for the mechanism.
+The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & Chaos** page has a Load Control panel (TPS / traffic-split) and a "Simulate Link Failure" control that performs a *real* RHSI chaos action — toggling it deletes or recreates the `kafka-bootstrap`/`postgresql-primary`/`apicurio-registry` Skupper Listeners on `cloud` (via `cluster-gateway`'s scoped Kubernetes RBAC), cutting off or restoring `cloud`'s access to onprem's Kafka/PostgreSQL/Apicurio so you can watch the cloud processor start rejecting transactions to the DLQ and `onprem` keep processing unaffected — all while the dashboard itself stays fully responsive, since it reaches `cloud` over a separate RHSI channel these Listeners don't touch. MirrorMaker 2 also stays unaffected and keeps mirroring `transactions-raw` throughout, since it runs over its own dedicated tunnel this toggle doesn't touch. See [`CLAUDE.md`](CLAUDE.md#chaos-scenario-rhsi-link-partition) for the mechanism.
 
 ## Verifying the install
 
@@ -149,6 +149,14 @@ oc login https://api.<cluster-domain>:6443   # re-authenticate to onprem or clou
 ## Applying config/code changes after install
 
 Restarting a pod does **not** rebuild its image — it just re-pulls the existing tag. To pick up source changes, re-run `./scripts/bootstrap-phase2.sh` (triggers new Tekton builds; Argo CD rolls out the new image automatically). Use `./rollout.sh` to force a rollout restart of all `banking-demo` deployments on both clusters after a sync.
+
+Every infra/app manifest under `infra/` and `app-services/` is Argo CD-managed (`selfHeal: true`) once Phase 1/2 have registered the `ApplicationSet`s — always `git push` a manifest change before (or instead of) applying it directly with `oc apply`, or Argo will silently revert your live change back to whatever's still in git on its next reconcile. Argo's default git poll interval means a pushed fix can take a few minutes to land on its own; to apply it immediately (e.g. mid-incident), force a refresh instead of waiting:
+
+```bash
+oc --context onprem annotate application.argoproj.io <app-name> -n openshift-gitops \
+  argocd.argoproj.io/refresh=hard --overwrite
+# e.g. <app-name> = banking-kafka-onprem, banking-mirrormaker2, banking-demo-transaction-processor-cloud, ...
+```
 
 ## Scripts reference
 

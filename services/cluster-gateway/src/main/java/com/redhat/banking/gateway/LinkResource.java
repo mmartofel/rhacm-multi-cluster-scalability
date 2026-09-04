@@ -39,9 +39,14 @@ import java.util.Map;
 // untouched — confirmed live: the Link stays Ready, SITES IN NETWORK stays 2, and
 // onprem's dashboard-backend can still reach cloud's /api/gateway/health throughout —
 // while still producing the full documented chaos effect: cloud transaction-processor's
-// DB/Apicurio health checks go DOWN with real "connection attempt failed" errors,
+// DB/Apicurio health checks go DOWN with real "connection attempt failed" errors, and
 // transactions get rejected to the DLQ (confirmed live: rejectedTotal climbed during the
-// test), and MM2 (which reads onprem's kafka-bootstrap over this same tunnel) pauses.
+// test). MM2 now runs over its own dedicated tunnel (kafka-bootstrap-mm2:9094, see
+// infra/skupper/{onprem/connectors,cloud/listeners}.yaml and CLAUDE.md's "MirrorMaker 2
+// needs its own dedicated listener/tunnel" note) that this list intentionally does NOT
+// touch, so unlike before, MM2 keeps mirroring transactions-raw uninterrupted through
+// this simulated outage — a more realistic depiction of a resilient DR pipeline than
+// coupling it to the app-tier outage being demonstrated here.
 //
 // Restore is a plain re-create using the static spec from the checked-in manifest
 // (infra/skupper/cloud/listeners.yaml) — no secret material, no per-run randomness, so

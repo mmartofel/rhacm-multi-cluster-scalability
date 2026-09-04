@@ -408,6 +408,15 @@ check "MirrorMaker2 source connector task RUNNING (cloud)" bash -c \
   "oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
    -o jsonpath='{.status.connectors[0].tasks[0].state}' | grep -q '^RUNNING$'"
 
+# A wildcard pattern like "transactions-.*" also mirrors transactions-committed —
+# LedgerUpdater has no partition-ownership filter or idempotency check (unlike
+# TransactionProcessor), so it silently double-persists every onprem-committed
+# transaction into the shared onprem ledger_entries table. Confirmed live
+# (see CLAUDE.md Phase 1 notes) — must be exactly "transactions-raw", nothing broader.
+check "MirrorMaker2 topicsPattern is exactly transactions-raw (cloud)" bash -c \
+  "oc --context ${CLOUD} get kafkamirrormaker2 banking-mirror -n ${INFRA_NS} \
+   -o jsonpath='{.spec.mirrors[0].topicsPattern}' | grep -q '^transactions-raw$'"
+
 printf '\n'
 if (( FAIL == 0 )); then
   printf '\033[1;32m=== Phase 1 checkpoint PASSED (%d/%d) ===\033[0m\n\n' \
