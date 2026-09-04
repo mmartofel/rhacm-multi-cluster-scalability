@@ -115,6 +115,14 @@ This is local basic-auth login only (username `admin`) — RHACS is not configur
 
 > `scripts/build-push-images-local.sh` is a fallback that builds images locally with podman/docker instead of Tekton — prefer `bootstrap-phase2.sh` unless Tekton is unavailable.
 
+## 7. Access the live dashboard
+
+```bash
+oc --context onprem get route dashboard -n banking-demo -o jsonpath='https://{.spec.host}{"\n"}'
+```
+
+The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & Chaos** page has a Load Control panel (TPS / traffic-split) and a "Simulate Link Failure" control that performs a *real* RHSI chaos action — toggling it deletes or recreates the actual `onprem-link-token` Secret on `cloud` (via `cluster-gateway`'s scoped Kubernetes RBAC), severing or restoring the cross-cluster link so you can watch MirrorMaker 2 pause, the cloud processor's circuit breaker open, and `onprem` keep processing unaffected. See [`CLAUDE.md`](CLAUDE.md#chaos-scenario-rhsi-link-partition) for the mechanism and manual recovery steps if the link needs to be restored outside the UI.
+
 ## Verifying the install
 
 ```bash
@@ -125,7 +133,8 @@ This is local basic-auth login only (username `admin`) — RHACS is not configur
 oc --context onprem get pods -n banking-demo -n banking-infra
 oc --context cloud   get pods -n banking-demo -n banking-infra
 
-# RHSI network console (Phase 1) and RHACS console (Phase 2)
+# Dashboard (Phase 2), RHSI network console (Phase 1), and RHACS console (Phase 2)
+oc --context onprem get route dashboard -n banking-demo
 oc --context onprem get route skupper-network-observer -n banking-infra
 oc --context onprem get route central -n stackrox
 ```

@@ -23,7 +23,7 @@ Cross-cluster connectivity is provided by **Red Hat Service Interconnect (RHSI)*
 | `transaction-processor` | Consumes Kafka, validates balance, writes to PostgreSQL, emits `TransactionCommitted`; failed transactions emitted to DLQ | JVM mode + KEDA; cloud instance writes to onprem PostgreSQL via RHSI; `OWNED_PARTITIONS` env var restricts consumption to cluster-specific partitions (onprem: 0,1,2 · cloud: 3,4,5) |
 | `account-service` | Balance reads via Quarkus `@CacheResult` in-process cache; reads PostgreSQL directly | HPA CPU 60%, 1–20 replicas (both clusters) |
 | `ledger-service` | Authoritative running balance; serves REST to dashboard-backend | cloud instance reads from onprem PostgreSQL via RHSI (`postgresql-primary`) |
-| `cluster-gateway` | Traffic weight control; aggregated `/health` and `/metrics` | Manages Istio VirtualService weights |
+| `cluster-gateway` | Traffic weight control; aggregated `/health` and `/metrics`; RHSI link break/restore (`LinkResource.java`, cloud only) | Manages Istio VirtualService weights; fabric8 `KubernetesClient` for Deployment reads (both clusters) and `onprem-link-token` Secret management (cloud only, see rbac-link.yaml) |
 | `dashboard-backend` | Polls both clusters every 500ms, aggregates, streams `MetricsPayload` via WebSocket | Quarkus WebSocket |
 | `dashboard-frontend` | Live dashboard: cluster map, TPS gauges, chaos panel, compliance widget | React 18 + Patternfly 5 |
 
