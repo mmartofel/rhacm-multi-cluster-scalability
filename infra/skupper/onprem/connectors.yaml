@@ -27,3 +27,47 @@ spec:
   routingKey: apicurio-registry
   port: 8080
   host: apicurio-registry.banking-infra.svc.cluster.local
+---
+# MirrorMaker2 tunnel — see the "mm2" listener comment in infra/kafka/base/kafka.yaml.
+# Bootstrap connector: routes the initial connection through the mm2 listener (9094)
+# so the broker's metadata response advertises the collision-free per-broker
+# hostnames below, not the colliding in-cluster ones from the plain/tls listeners.
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: kafka-bootstrap-mm2
+  namespace: banking-infra
+spec:
+  routingKey: kafka-bootstrap-mm2
+  port: 9094
+  host: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local
+---
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: banking-kafka-broker-0-mm2
+  namespace: banking-infra
+spec:
+  routingKey: banking-kafka-broker-0-mm2
+  port: 9094
+  host: banking-kafka-broker-0.banking-kafka-kafka-brokers.banking-infra.svc.cluster.local
+---
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: banking-kafka-broker-1-mm2
+  namespace: banking-infra
+spec:
+  routingKey: banking-kafka-broker-1-mm2
+  port: 9094
+  host: banking-kafka-broker-1.banking-kafka-kafka-brokers.banking-infra.svc.cluster.local
+---
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: banking-kafka-broker-2-mm2
+  namespace: banking-infra
+spec:
+  routingKey: banking-kafka-broker-2-mm2
+  port: 9094
+  host: banking-kafka-broker-2.banking-kafka-kafka-brokers.banking-infra.svc.cluster.local

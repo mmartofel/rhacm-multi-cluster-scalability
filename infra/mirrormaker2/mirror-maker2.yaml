@@ -5,7 +5,14 @@ metadata:
   namespace: banking-infra
 spec:
   version: 4.2.0
-  replicas: 0
+  # Re-enabled (2026-09-04) — the "self-replication via GCP-local Kafka" issue that
+  # forced this to 0 (see git history, commit 6dbb9e0) was a genuine advertised-listener
+  # DNS collision between onprem's and cloud's identically-named Kafka clusters, still
+  # present today, not something specific to the old GCP/AWS environment. Fixed by
+  # routing through the dedicated "mm2" listener (see infra/kafka/base/kafka.yaml and
+  # infra/skupper/{onprem/connectors,cloud/listeners}.yaml) instead of the plain/tls
+  # listeners MM2 previously bootstrapped through — see CLAUDE.md finding 6.
+  replicas: 1
   target:
     alias: cloud
     bootstrapServers: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
@@ -20,7 +27,7 @@ spec:
   mirrors:
   - source:
       alias: onprem
-      bootstrapServers: kafka-bootstrap:9092
+      bootstrapServers: kafka-bootstrap-mm2:9094
     topicsPattern: "transactions-.*"
     sourceConnector:
       config:

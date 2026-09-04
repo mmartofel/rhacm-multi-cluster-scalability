@@ -18,6 +18,26 @@ spec:
       port: 9093
       type: internal
       tls: true
+    # Dedicated listener for MirrorMaker2's cross-cluster (Skupper) access. The
+    # existing "plain"/"tls" listeners advertise brokers at their in-cluster DNS
+    # name (e.g. banking-kafka-broker-0.banking-kafka-kafka-brokers.banking-infra
+    # .svc.cluster.local) — since both onprem and cloud run an identically-named
+    # Kafka cluster in an identically-named namespace, that name resolves LOCALLY
+    # on whichever cluster the client happens to be on, not through the Skupper
+    # tunnel. A client on cloud bootstrapping through the tunnel to onprem's
+    # Kafka gets redirected by the broker's own metadata response to that
+    # colliding hostname and silently ends up reading/writing cloud's own Kafka
+    # instead — confirmed live (self-replication loop), see CLAUDE.md finding 6
+    # for the diagnosis. advertisedHostTemplate gives each broker a unique,
+    # collision-free hostname; Strimzi officially supports this override "for
+    # all types of listeners", including internal ones, specifically for
+    # cross-cluster tunnel scenarios like this.
+    - name: mm2
+      port: 9094
+      type: internal
+      tls: false
+      configuration:
+        advertisedHostTemplate: banking-kafka-broker-{nodeId}-mm2
     config:
       offsets.topic.replication.factor: "3"
       transaction.state.log.replication.factor: "3"

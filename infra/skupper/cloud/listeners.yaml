@@ -27,3 +27,47 @@ spec:
   routingKey: apicurio-registry
   port: 8080
   host: apicurio-registry
+---
+# MirrorMaker2 tunnel — see the matching Connectors in infra/skupper/onprem/connectors.yaml
+# and the "mm2" listener comment in infra/kafka/base/kafka.yaml. host must match the
+# advertisedHostTemplate-generated per-broker hostname exactly, since that's what the
+# Kafka client resolves after bootstrapping.
+apiVersion: skupper.io/v2alpha1
+kind: Listener
+metadata:
+  name: kafka-bootstrap-mm2
+  namespace: banking-infra
+spec:
+  routingKey: kafka-bootstrap-mm2
+  port: 9094
+  host: kafka-bootstrap-mm2
+---
+apiVersion: skupper.io/v2alpha1
+kind: Listener
+metadata:
+  name: banking-kafka-broker-0-mm2
+  namespace: banking-infra
+spec:
+  routingKey: banking-kafka-broker-0-mm2
+  port: 9094
+  host: banking-kafka-broker-0-mm2
+---
+apiVersion: skupper.io/v2alpha1
+kind: Listener
+metadata:
+  name: banking-kafka-broker-1-mm2
+  namespace: banking-infra
+spec:
+  routingKey: banking-kafka-broker-1-mm2
+  port: 9094
+  host: banking-kafka-broker-1-mm2
+---
+apiVersion: skupper.io/v2alpha1
+kind: Listener
+metadata:
+  name: banking-kafka-broker-2-mm2
+  namespace: banking-infra
+spec:
+  routingKey: banking-kafka-broker-2-mm2
+  port: 9094
+  host: banking-kafka-broker-2-mm2
