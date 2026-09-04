@@ -26,7 +26,8 @@ export default function TpmChart({ history, capacityTps = ONPREM_CAPACITY_TPS }:
           <span style={{ color: '#c9190b' }}>– – Onprem capacity ({capacityTps} TPS)</span>
         </div>
       </div>
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0 }}>
         {history.length < 2 ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
             Collecting data…
@@ -67,6 +68,7 @@ export default function TpmChart({ history, capacityTps = ONPREM_CAPACITY_TPS }:
             />
           </Chart>
         )}
+        </div>
       </div>
     </div>
   );

@@ -161,7 +161,8 @@ function ReplicaChart({ history, title, subtitle, onpremKey, cloudKey, minRef, m
         </div>
       </div>
       <div style={{ padding: '0 12px 8px', fontSize: 11, color: '#6a6e73' }}>{subtitle}</div>
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0 }}>
         {history.length < 2 ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
             Collecting data…
@@ -224,6 +225,7 @@ function ReplicaChart({ history, title, subtitle, onpremKey, cloudKey, minRef, m
             )}
           </Chart>
         )}
+        </div>
       </div>
     </div>
   );

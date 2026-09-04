@@ -33,7 +33,8 @@ export default function ThroughputChart({ history, capacityTps = ONPREM_CAPACITY
           <span style={{ color: '#f4c14580', fontStyle: 'italic' }}>Commit lines estimated from traffic weights · real data when ledger active</span>
         )}
       </div>
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }}>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0 }}>
         {history.length < 2 ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6a6e73', fontSize: 13 }}>
             Collecting data…
@@ -78,6 +79,7 @@ export default function ThroughputChart({ history, capacityTps = ONPREM_CAPACITY
             />
           </Chart>
         )}
+        </div>
       </div>
     </div>
   );
