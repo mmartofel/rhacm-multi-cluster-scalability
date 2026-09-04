@@ -136,17 +136,32 @@ public class LinkResource {
         }
     }
 
+    // These 3 Listeners are normally managed declaratively by `oc apply -f
+    // infra/skupper/cloud/listeners.yaml` (bootstrap-phase1.sh Step 7 / bootstrap-phase2.sh
+    // Step 3), which stores a kubectl.kubernetes.io/last-applied-configuration annotation on
+    // create for future 3-way-merge diffing. A plain imperative create() (as fabric8's API
+    // naturally produces) never sets that annotation — confirmed live: bootstrap-phase2.sh's
+    // next `oc apply` run then warns "resource is missing the ... annotation ... will be
+    // patched automatically" for exactly these 3 objects. Setting it ourselves here, matching
+    // the annotation's exact JSON content, keeps restore indistinguishable from a plain
+    // `oc apply` and avoids that warning on every subsequent script run after a UI restore.
+    private static final String LAST_APPLIED_CONFIG_ANNOTATION = "kubectl.kubernetes.io/last-applied-configuration";
+
     private GenericKubernetesResource buildListener(ListenerSpec l) {
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("routingKey", l.name());
         spec.put("port", l.port());
         spec.put("host", l.name());
+        String lastAppliedConfig = String.format(
+                "{\"apiVersion\":\"skupper.io/v2alpha1\",\"kind\":\"Listener\",\"metadata\":{\"annotations\":{},\"name\":\"%s\",\"namespace\":\"%s\"},\"spec\":{\"host\":\"%s\",\"port\":%d,\"routingKey\":\"%s\"}}",
+                l.name(), NS, l.name(), l.port(), l.name());
         return new GenericKubernetesResourceBuilder()
                 .withApiVersion("skupper.io/v2alpha1")
                 .withKind("Listener")
                 .withNewMetadata()
                     .withName(l.name())
                     .withNamespace(NS)
+                    .addToAnnotations(LAST_APPLIED_CONFIG_ANNOTATION, lastAppliedConfig)
                 .endMetadata()
                 .addToAdditionalProperties("spec", spec)
                 .build();
