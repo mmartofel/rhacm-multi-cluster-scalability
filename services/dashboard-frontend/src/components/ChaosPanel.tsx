@@ -121,7 +121,7 @@ export default function ChaosPanel({ payload, onModeChange }: Props) {
         {/* Endpoint labels */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <span style={{ fontSize: 13, color: ONPREM_COLOR, fontWeight: 700 }}>On-Prem {onpremPct}%</span>
-          <span style={{ fontSize: 11, color: '#8a8d90' }}>generation-rate split</span>
+          <span style={{ fontSize: 11, color: '#8a8d90' }}>transactions traffic split</span>
           <span style={{ fontSize: 13, color: CLOUD_COLOR, fontWeight: 700 }}>Cloud {cloudPct}%</span>
         </div>
 
