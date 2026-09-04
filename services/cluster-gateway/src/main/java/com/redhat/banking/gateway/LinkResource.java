@@ -2,8 +2,6 @@ package com.redhat.banking.gateway;
 
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceBuilder;
-import io.fabric8.kubernetes.api.model.Secret;
-import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
@@ -19,45 +17,57 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-// Manages the RHSI cross-cluster link on cloud: the Skupper `Link` CR (skupper.io/v2alpha1)
-// and the onprem-link-token Secret (banking-infra, type kubernetes.io/tls) its
-// spec.tlsCredentials references.
+// Simulates an RHSI link failure by tearing down ONLY the Skupper Listeners (cloud,
+// banking-infra) that expose onprem's Kafka/PostgreSQL/Apicurio to cloud — NOT the
+// cross-cluster Link/inter-router connection itself.
 //
-// CRITICAL — confirmed live: deleting only the Secret has NO effect on an already-
-// established link. Skupper's router authenticates and opens the inter-router AMQP/TLS
-// connection once, using the cert material loaded at connection time; it does not watch
-// the Secret and does not tear down a live session when the Secret disappears. `skstat -c`
-// on the cloud skupper-router showed the inter-router connection still fully alive
-// (TLSv1.3, x.509, uptime unaffected) minutes after the Secret was deleted, and cloud's
-// processor kept writing to onprem PostgreSQL/Apicurio via the tunnel with zero rejects —
-// the chaos scenario had no observable effect. The `Link` CR is the actual desired-state
-// object the site controller watches: deleting IT is what commands the router to close the
-// connection (confirmed live: `skstat -c` immediately loses the inter-router connection and
-// `sites.skupper.io` SITES IN NETWORK drops 2 -> 1). So break/restore must operate on BOTH
-// objects, Link first on break (severs immediately) and Secret first on restore (so the
-// Link's tlsCredentials reference resolves as soon as it's created).
+// Why not the Link CR (tried first, reverted after live testing): dashboard-backend runs
+// on onprem only and reaches cloud's cluster-gateway exclusively through a *separate*
+// Skupper Listener (onprem, routing key cloud-cluster-gateway/cloud-ledger-service) /
+// Connector (cloud) pair — confirmed live via `oc get listeners,connectors -n
+// banking-infra` on both clusters. If the whole Link goes down, that control-plane
+// channel goes down with it, and the dashboard's own "restore" button can never reach
+// cloud again to undo it — a network partition can't heal itself by sending a command
+// through the partition.
 //
-// Only meaningful on cloud (onprem issues the AccessGrant; cloud redeems it into this
-// AccessToken-backed Secret/Link pair, so neither object exists on onprem) — see
-// rbac-link.yaml, applied to the cloud overlay only. Both names are fixed literals from
-// bootstrap-phase1.sh Step 6, not environment-specific.
+// Deleting only the kafka-bootstrap/postgresql-primary/apicurio-registry Listeners
+// leaves the cluster-gateway/ledger-service Listener/Connector pair completely
+// untouched — confirmed live: the Link stays Ready, SITES IN NETWORK stays 2, and
+// onprem's dashboard-backend can still reach cloud's /api/gateway/health throughout —
+// while still producing the full documented chaos effect: cloud transaction-processor's
+// DB/Apicurio health checks go DOWN with real "connection attempt failed" errors,
+// transactions get rejected to the DLQ (confirmed live: rejectedTotal climbed during the
+// test), and MM2 (which reads onprem's kafka-bootstrap over this same tunnel) pauses.
+//
+// Restore is a plain re-create using the static spec from the checked-in manifest
+// (infra/skupper/cloud/listeners.yaml) — no secret material, no per-run randomness, so
+// no in-memory caching or cache-loss/409 path is needed (unlike the Secret-based
+// approach this replaced).
 @Path("/api/gateway")
 @Produces(MediaType.APPLICATION_JSON)
 @ApplicationScoped
 public class LinkResource {
 
     private static final String NS = "banking-infra";
-    private static final String SECRET_NAME = "onprem-link-token";
-    private static final String LINK_NAME = "onprem-link-token";
 
-    private static final ResourceDefinitionContext LINK_CONTEXT = new ResourceDefinitionContext.Builder()
+    private record ListenerSpec(String name, int port) {}
+
+    // Mirrors infra/skupper/cloud/listeners.yaml verbatim.
+    private static final List<ListenerSpec> LISTENERS = List.of(
+            new ListenerSpec("kafka-bootstrap", 9092),
+            new ListenerSpec("postgresql-primary", 5432),
+            new ListenerSpec("apicurio-registry", 8080)
+    );
+
+    private static final ResourceDefinitionContext LISTENER_CONTEXT = new ResourceDefinitionContext.Builder()
             .withGroup("skupper.io")
             .withVersion("v2alpha1")
-            .withKind("Link")
-            .withPlural("links")
+            .withKind("Listener")
+            .withPlural("listeners")
             .withNamespaced(true)
             .build();
 
@@ -66,45 +76,20 @@ public class LinkResource {
 
     private volatile String linkStatus = "unknown";
 
-    // Backups captured immediately before deletion, so restore can recreate both objects
-    // verbatim. Lost on pod restart — restore then returns 409 pointing at the manual
-    // fallback rather than fabricating fake objects.
-    private volatile Secret cachedSecret;
-    private volatile GenericKubernetesResource cachedLink;
-
-    private NonNamespaceOperation<GenericKubernetesResource, ?, Resource<GenericKubernetesResource>> linkClient() {
-        return k8s.genericKubernetesResources(LINK_CONTEXT).inNamespace(NS);
+    private NonNamespaceOperation<GenericKubernetesResource, ?, Resource<GenericKubernetesResource>> listenerClient() {
+        return k8s.genericKubernetesResources(LISTENER_CONTEXT).inNamespace(NS);
     }
 
     @Scheduled(every = "PT5S")
     void refreshStatus() {
         try {
-            GenericKubernetesResource link = linkClient().withName(LINK_NAME).get();
-            linkStatus = (link != null && isReady(link)) ? "active" : "broken";
+            long present = LISTENERS.stream()
+                    .filter(l -> listenerClient().withName(l.name()).get() != null)
+                    .count();
+            linkStatus = present == LISTENERS.size() ? "active" : present == 0 ? "broken" : "unknown";
         } catch (Exception e) {
             linkStatus = "unknown";
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean isReady(GenericKubernetesResource link) {
-        Object statusObj = link.getAdditionalProperties().get("status");
-        if (!(statusObj instanceof Map)) {
-            return false;
-        }
-        Object conditionsObj = ((Map<String, Object>) statusObj).get("conditions");
-        if (!(conditionsObj instanceof List)) {
-            return false;
-        }
-        for (Object c : (List<?>) conditionsObj) {
-            if (c instanceof Map) {
-                Map<?, ?> cond = (Map<?, ?>) c;
-                if ("Ready".equals(cond.get("type"))) {
-                    return "True".equals(cond.get("status"));
-                }
-            }
-        }
-        return false;
     }
 
     @GET
@@ -118,27 +103,8 @@ public class LinkResource {
     @Blocking
     public Response breakLink() {
         try {
-            GenericKubernetesResource liveLink = linkClient().withName(LINK_NAME).get();
-            Secret liveSecret = k8s.secrets().inNamespace(NS).withName(SECRET_NAME).get();
-
-            if (liveLink == null && liveSecret == null) {
-                linkStatus = "broken";
-                return Response.ok(Map.of("status", "broken", "alreadyBroken", true)).build();
-            }
-
-            if (liveLink != null) {
-                cachedLink = cleanLink(liveLink);
-            }
-            if (liveSecret != null) {
-                cachedSecret = cleanSecret(liveSecret);
-            }
-
-            // Link first — this is what actually severs the live connection.
-            if (liveLink != null) {
-                linkClient().withName(LINK_NAME).delete();
-            }
-            if (liveSecret != null) {
-                k8s.secrets().inNamespace(NS).withName(SECRET_NAME).delete();
+            for (ListenerSpec l : LISTENERS) {
+                listenerClient().withName(l.name()).delete();
             }
             linkStatus = "broken";
             return Response.ok(Map.of("status", "broken")).build();
@@ -155,32 +121,12 @@ public class LinkResource {
     @Blocking
     public Response restoreLink() {
         try {
-            GenericKubernetesResource liveLink = linkClient().withName(LINK_NAME).get();
-            if (liveLink != null) {
-                linkStatus = isReady(liveLink) ? "active" : "broken";
-                return Response.ok(Map.of("status", linkStatus, "alreadyActive", true)).build();
+            for (ListenerSpec l : LISTENERS) {
+                if (listenerClient().withName(l.name()).get() == null) {
+                    k8s.resource(buildListener(l)).inNamespace(NS).create();
+                }
             }
-            if (cachedSecret == null || cachedLink == null) {
-                return Response.status(409).entity(Map.of(
-                        "status", "broken",
-                        "error", "no-cached-secret",
-                        "message", "cluster-gateway has no cached onprem-link-token Secret/Link (pod likely restarted " +
-                                   "since it was broken). Manual recovery: delete any stale AccessToken/Link objects " +
-                                   "(oc delete accesstoken,link onprem-link-token -n banking-infra --context cloud), " +
-                                   "then re-run the AccessGrant/AccessToken exchange (bootstrap-phase1.sh Step 6) — " +
-                                   "confirmed live: re-applying onto an existing AccessToken only updates its spec " +
-                                   "and does not recreate the Secret; only a fresh AccessToken create does."
-                )).build();
-            }
-            // Secret first, then Link — mirrors bootstrap-phase1.sh's original ordering
-            // so the Link's tlsCredentials reference resolves immediately on creation.
-            if (k8s.secrets().inNamespace(NS).withName(SECRET_NAME).get() == null) {
-                k8s.resource(cachedSecret).inNamespace(NS).create();
-            }
-            k8s.resource(cachedLink).inNamespace(NS).create();
-            cachedSecret = null;
-            cachedLink = null;
-            linkStatus = "broken"; // real value confirmed by the next 5s refreshStatus() poll
+            linkStatus = "active";
             return Response.ok(Map.of("status", "active")).build();
         } catch (Exception e) {
             linkStatus = "unknown";
@@ -190,31 +136,19 @@ public class LinkResource {
         }
     }
 
-    private Secret cleanSecret(Secret live) {
-        return new SecretBuilder()
+    private GenericKubernetesResource buildListener(ListenerSpec l) {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("routingKey", l.name());
+        spec.put("port", l.port());
+        spec.put("host", l.name());
+        return new GenericKubernetesResourceBuilder()
+                .withApiVersion("skupper.io/v2alpha1")
+                .withKind("Listener")
                 .withNewMetadata()
-                    .withName(SECRET_NAME)
+                    .withName(l.name())
                     .withNamespace(NS)
-                    .withLabels(live.getMetadata().getLabels())
-                    .withAnnotations(live.getMetadata().getAnnotations())
                 .endMetadata()
-                .withType(live.getType())
-                .withData(live.getData())
+                .addToAdditionalProperties("spec", spec)
                 .build();
-    }
-
-    private GenericKubernetesResource cleanLink(GenericKubernetesResource live) {
-        GenericKubernetesResourceBuilder builder = new GenericKubernetesResourceBuilder()
-                .withApiVersion(live.getApiVersion())
-                .withKind(live.getKind())
-                .withNewMetadata()
-                    .withName(LINK_NAME)
-                    .withNamespace(NS)
-                .endMetadata();
-        Object specObj = live.getAdditionalProperties().get("spec");
-        if (specObj != null) {
-            builder.addToAdditionalProperties("spec", specObj);
-        }
-        return builder.build();
     }
 }

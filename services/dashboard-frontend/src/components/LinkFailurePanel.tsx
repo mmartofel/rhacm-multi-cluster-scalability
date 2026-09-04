@@ -20,11 +20,13 @@ function statusLabel(status: string): string {
   return 'Interconnect Status Unknown';
 }
 
-// Real infrastructure toggle: deletes/recreates the onprem-link-token Secret
-// (banking-infra, cloud) via dashboard-backend -> cloud cluster-gateway -> fabric8
-// KubernetesClient. Never flips color locally on click — waits for the next WebSocket
-// payload so every viewer (and page reload) reflects real cluster state, including
-// changes made outside the UI (e.g. a manual `oc delete secret onprem-link-token`).
+// Real infrastructure toggle: deletes/recreates the Skupper Listeners (banking-infra,
+// cloud) that expose onprem's Kafka/PostgreSQL/Apicurio to cloud, via dashboard-backend
+// -> cloud cluster-gateway -> fabric8 KubernetesClient. Deliberately does NOT touch the
+// Link/inter-router connection itself — that would also sever the separate channel this
+// very control survives on (see CLAUDE.md's Chaos Scenario section). Never flips color
+// locally on click — waits for the next WebSocket payload so every viewer (and page
+// reload) reflects real cluster state, including changes made outside the UI.
 export default function LinkFailurePanel({ payload }: Props) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
@@ -73,8 +75,8 @@ export default function LinkFailurePanel({ payload }: Props) {
       </div>
 
       <div style={{ fontSize: 11, color: '#6a6e73', marginBottom: 14, lineHeight: 1.6 }}>
-        Deletes (or recreates) the <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>onprem-link-token</code> Secret
-        on Cloud — a real RHSI tunnel severance. MM2 pauses, Cloud's processor circuit-breaker opens, On-Prem continues unaffected.
+        Deletes (or recreates) the <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>kafka-bootstrap</code>, <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>postgresql-primary</code>, and <code style={{ background: '#2a2d32', padding: '1px 4px', borderRadius: 3 }}>apicurio-registry</code> Skupper Listeners
+        on Cloud — a real RHSI outage for those services. MM2 pauses, Cloud's processor rejects transactions to the DLQ, On-Prem continues unaffected.
       </div>
 
       {message && (

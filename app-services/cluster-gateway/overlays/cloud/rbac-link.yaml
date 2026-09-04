@@ -4,22 +4,17 @@ metadata:
   name: cluster-gateway-link-manager
   namespace: banking-infra
 rules:
-- apiGroups: [""]
-  resources: ["secrets"]
-  resourceNames: ["onprem-link-token"]
-  verbs: ["get", "delete"]
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["create"]
-# The Skupper Link CR is what actually severs/restores the live inter-router
-# connection — deleting only the Secret above has no effect on an already-
-# established session (confirmed live). See LinkResource.java.
+# Simulates an RHSI link failure by tearing down/recreating the Skupper Listeners that
+# expose onprem's Kafka/PostgreSQL/Apicurio to cloud — NOT the Link CR itself, since that
+# would also sever the separate Listener/Connector pair the dashboard's own control-plane
+# traffic depends on (cloud-cluster-gateway/cloud-ledger-service), making the UI's
+# restore button unable to ever reach cloud again. See LinkResource.java.
 - apiGroups: ["skupper.io"]
-  resources: ["links"]
-  resourceNames: ["onprem-link-token"]
+  resources: ["listeners"]
+  resourceNames: ["kafka-bootstrap", "postgresql-primary", "apicurio-registry"]
   verbs: ["get", "delete"]
 - apiGroups: ["skupper.io"]
-  resources: ["links"]
+  resources: ["listeners"]
   verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -132,9 +132,9 @@ public class DashboardResource {
         }
     }
 
-    // Link-failure chaos control — only ever proxies to cloud, since the
-    // onprem-link-token Secret (banking-infra) only exists there (onprem issues the
-    // AccessGrant, cloud redeems it into this Secret).
+    // Link-failure chaos control — only ever proxies to cloud, since the Skupper
+    // Listeners it manages (kafka-bootstrap/postgresql-primary/apicurio-registry,
+    // banking-infra) only exist there.
     @PUT
     @Path("/link/break")
     public Response breakLink() {
