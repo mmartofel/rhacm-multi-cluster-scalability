@@ -28,7 +28,19 @@ spec:
   - source:
       alias: onprem
       bootstrapServers: kafka-bootstrap-mm2:9094
-    topicsPattern: "transactions-.*"
+    # Only transactions-raw is meant to be DR-mirrored (see "Critical Data Flow" at
+    # the top of CLAUDE.md and the OWNED_PARTITIONS guard in TransactionProcessor,
+    # which exists specifically because this topic is mirrored). "transactions-.*"
+    # was too broad — confirmed live (2026-09-04) it silently also mirrored
+    # transactions-committed, which cloud's LedgerUpdater (unlike TransactionProcessor)
+    # has no partition-ownership filter or idempotency check for, so it double-persisted
+    # every onprem-committed transaction into the shared onprem ledger_entries table:
+    # once from onprem's own ledger-service, again from cloud's consuming the
+    # MM2-mirrored copy. Never caught earlier because MM2 was replicas:0 the whole
+    # time this interaction was possible. transactions-dlq has no cloud-side consumer
+    # either way, so restricting to exactly transactions-raw matches the one thing
+    # that's actually meant to cross the tunnel.
+    topicsPattern: "transactions-raw"
     sourceConnector:
       config:
         replication.factor: "3"
