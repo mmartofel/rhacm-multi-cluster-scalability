@@ -105,8 +105,11 @@ public class LinkResource {
                         "status", "broken",
                         "error", "no-cached-secret",
                         "message", "cluster-gateway has no cached onprem-link-token Secret (pod likely restarted since " +
-                                   "it was broken). Manual recovery: re-run the AccessGrant/AccessToken exchange " +
-                                   "(bootstrap-phase1.sh Step 6) on onprem/cloud."
+                                   "it was broken). Manual recovery: delete the stale AccessToken/Link objects first " +
+                                   "(oc delete accesstoken,link onprem-link-token -n banking-infra --context cloud), " +
+                                   "then re-run the AccessGrant/AccessToken exchange (bootstrap-phase1.sh Step 6) — " +
+                                   "confirmed live: re-applying onto an existing AccessToken only updates its spec " +
+                                   "and does not recreate the Secret; only a fresh AccessToken create does."
                 )).build();
             }
             k8s.secrets().inNamespace(NS).resource(cachedSecret).create();
