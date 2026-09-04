@@ -58,10 +58,22 @@ public class TransactionGeneratorService {
         return a;
     }
 
+    private final AtomicLong droppedNoDemand = new AtomicLong(0);
+
     @Scheduled(every = "1s", delay = 5, delayUnit = TimeUnit.SECONDS)
     void generateBatch() {
         int rate = tpsRate;
         for (int i = 0; i < rate; i++) {
+            // Emitter.send() throws IllegalStateException (SRMSG00034) if the downstream
+            // Kafka sink has no outstanding demand — e.g. max-in-flight briefly exhausted.
+            // MicroProfile's own documented usage is to check hasRequests() first and skip
+            // rather than call send() blindly; losing a synthetic demo transaction here is
+            // harmless, unlike letting the exception abort the rest of this tick's loop.
+            if (!emitter.hasRequests()) {
+                droppedNoDemand.incrementAndGet();
+                continue;
+            }
+
             String accountId = ACCOUNTS[random.nextInt(ACCOUNTS.length)];
             TransactionType type = random.nextBoolean() ? TransactionType.DEBIT : TransactionType.CREDIT;
             double amount = Math.round((10 + random.nextDouble() * 990) * 100.0) / 100.0;
@@ -83,6 +95,10 @@ public class TransactionGeneratorService {
                             .build())));
             generated.incrementAndGet();
         }
+    }
+
+    public long getDroppedNoDemand() {
+        return droppedNoDemand.get();
     }
 
     public long getGenerated() {
