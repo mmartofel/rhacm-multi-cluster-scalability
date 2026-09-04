@@ -5,3 +5,4 @@ quay.sh
 node_modules/
 dist/
 **/target/
+services/dashboard-frontend/build/
