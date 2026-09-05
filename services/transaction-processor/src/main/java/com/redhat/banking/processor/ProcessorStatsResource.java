@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.redhat.banking.processor.KafkaPartitionStats.PartitionLag;
+import com.redhat.banking.processor.KafkaPartitionStats.TopicLag;
 
 @Path("/api/processor/stats")
 @Produces(MediaType.APPLICATION_JSON)
@@ -36,5 +37,12 @@ public class ProcessorStatsResource {
     @Blocking
     public List<PartitionLag> partitionLag() {
         return kafkaPartitionStats.getLag();
+    }
+
+    @GET
+    @Path("/kafka-topics")
+    @Blocking
+    public List<TopicLag> kafkaTopics() {
+        return kafkaPartitionStats.getTopicStats();
     }
 }

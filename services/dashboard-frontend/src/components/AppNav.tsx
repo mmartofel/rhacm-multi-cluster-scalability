@@ -7,6 +7,7 @@ const ITEMS: { id: View; label: string; icon: string }[] = [
   { id: 'overview',      label: 'Overview',         icon: '⬡' },
   { id: 'load-control',  label: 'Load Control',      icon: '⚡' },
   { id: 'chaos',         label: 'Traffic & Chaos',   icon: '↔' },
+  { id: 'kafka-load',    label: 'Kafka Load',        icon: '⧉' },
   { id: 'autoscale',     label: 'Autoscale Watch',   icon: '↕' },
   { id: 'compliance',    label: 'Compliance',        icon: '✓' },
   { id: 'about',         label: 'About',             icon: 'ℹ' },

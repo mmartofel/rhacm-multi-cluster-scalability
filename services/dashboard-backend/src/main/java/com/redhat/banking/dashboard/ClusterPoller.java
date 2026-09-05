@@ -120,12 +120,21 @@ public class ClusterPoller {
         }
 
         try {
-            String lagJson = httpGet(gatewayUrl + "/api/gateway/kafka/partition-lag");
+            String lagJson = httpGet(gatewayUrl + "/api/gateway/kafka/partition-lag", Duration.ofMillis(700));
             List<ClusterMetrics.PartitionStat> stats =
                     mapper.readValue(lagJson, new TypeReference<List<ClusterMetrics.PartitionStat>>() {});
             m.partitions = stats;
         } catch (Exception e) {
             // leave empty — partition lag is best-effort
+        }
+
+        try {
+            String topicsJson = httpGet(gatewayUrl + "/api/gateway/kafka/topics", Duration.ofMillis(700));
+            List<ClusterMetrics.TopicLag> topics =
+                    mapper.readValue(topicsJson, new TypeReference<List<ClusterMetrics.TopicLag>>() {});
+            m.kafkaTopics = topics;
+        } catch (Exception e) {
+            // leave empty — best-effort, same as partitions above
         }
 
         return m;
@@ -142,10 +151,14 @@ public class ClusterPoller {
     }
 
     private String httpGet(String url) throws Exception {
+        return httpGet(url, Duration.ofMillis(400));
+    }
+
+    private String httpGet(String url, Duration timeout) throws Exception {
         var client = java.net.http.HttpClient.newHttpClient();
         var request = java.net.http.HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofMillis(400))
+                .timeout(timeout)
                 .GET()
                 .build();
         return client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString()).body();

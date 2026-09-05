@@ -17,6 +17,32 @@ public class ClusterMetrics {
             this.owned = owned;
         }
     }
+
+    public static class PartitionDetail {
+        public int partition;
+        public long endOffset;
+        public long committedOffset;
+        public long lag;
+        public boolean owned;
+        public int isrCount;
+        public int replicaCount;
+        public boolean underReplicated;
+        public long logDirBytes;
+    }
+
+    public static class TopicLag {
+        public String topic;
+        public int partitionCount;
+        public String consumerGroup;
+        public boolean hasConsumer;
+        public String groupState;
+        public int memberCount;
+        public long totalLag;
+        public double msgsPerSec;
+        public int underReplicatedCount;
+        public List<PartitionDetail> partitions;
+    }
+
     public String cluster;
     public double tps;
     public int trafficWeight;
@@ -30,4 +56,5 @@ public class ClusterMetrics {
     public int    accountReplicas   = -1;   // readyReplicas of account-service (-1 = unknown)
     public long   rejectedTotal     = 0;    // cumulative rejected transactions since processor start
     public List<PartitionStat> partitions = new ArrayList<>();
+    public List<TopicLag> kafkaTopics = new ArrayList<>();
 }

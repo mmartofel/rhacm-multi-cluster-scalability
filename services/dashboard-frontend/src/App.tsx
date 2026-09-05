@@ -17,6 +17,7 @@ import ChaosPanel from './components/ChaosPanel';
 import LinkFailurePanel from './components/LinkFailurePanel';
 import ComplianceWidget from './components/ComplianceWidget';
 import AutoscaleWatchPanel from './components/AutoscaleWatchPanel';
+import KafkaLoadPanel from './components/KafkaLoadPanel';
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/metrics`;
 const MAX_HISTORY = 360;
@@ -24,7 +25,7 @@ const MAX_HISTORY = 360;
 export type TpmPoint = { ts: number; onprem: number; cloud: number };
 export type ThroughputPoint = { ts: number; genRate: number; onpremCommit: number; cloudCommit: number; estimated: boolean };
 export type AutoscalePoint = { ts: number; onpremProcessor: number; cloudProcessor: number; onpremAccount: number; cloudAccount: number };
-export type View = 'overview' | 'load-control' | 'chaos' | 'compliance' | 'autoscale' | 'about';
+export type View = 'overview' | 'load-control' | 'chaos' | 'kafka-load' | 'compliance' | 'autoscale' | 'about';
 export type ProcessingMode = 'auto-burst' | 'onprem-only' | 'split' | 'cloud-only';
 
 export default function App() {
@@ -144,6 +145,8 @@ export default function App() {
             <LinkFailurePanel payload={payload} />
           </div>
         );
+      case 'kafka-load':
+        return <KafkaLoadPanel payload={payload} />;
       case 'compliance':
         return <ComplianceWidget />;
       case 'autoscale':

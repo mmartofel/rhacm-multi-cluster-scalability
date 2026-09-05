@@ -9,6 +9,31 @@ export interface PartitionStat {
   owned: boolean;
 }
 
+export interface PartitionDetail {
+  partition: number;
+  endOffset: number;
+  committedOffset: number;
+  lag: number;
+  owned: boolean;
+  isrCount: number;
+  replicaCount: number;
+  underReplicated: boolean;
+  logDirBytes: number; // -1 = not yet computed
+}
+
+export interface TopicLag {
+  topic: string;
+  partitionCount: number;
+  consumerGroup: string | null;
+  hasConsumer: boolean;
+  groupState: string;
+  memberCount: number;
+  totalLag: number;
+  msgsPerSec: number;
+  underReplicatedCount: number;
+  partitions: PartitionDetail[];
+}
+
 export interface ClusterMetrics {
   cluster: string;
   tps: number;
@@ -23,6 +48,7 @@ export interface ClusterMetrics {
   accountReplicas: number;
   rejectedTotal: number;
   partitions?: PartitionStat[];
+  kafkaTopics?: TopicLag[];
 }
 
 export interface MetricsPayload {
