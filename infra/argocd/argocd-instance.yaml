@@ -4,7 +4,7 @@
 # OOMKilled crash loops: default 2Gi controller memory limit + no Event
 # resource exclusion is too small for this RHACM-hub cluster (401 CRDs,
 # 2 registered clusters).
-apiVersion: argoproj.io/v1alpha1
+apiVersion: argoproj.io/v1beta1
 kind: ArgoCD
 metadata:
   name: openshift-gitops
