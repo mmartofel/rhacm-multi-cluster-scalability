@@ -10,9 +10,10 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+import javax.net.ssl.X509ExtendedTrustManager;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -58,31 +59,37 @@ public class RhacsPoller {
     // endpoint for init-bundle generation; it's an in-cluster call over the pod
     // network, not a call crossing a real trust boundary.
     //
-    // Two separate checks need disabling to match `curl -sk`'s actual behavior — the
-    // trust-all TrustManager below only skips certificate *chain* validation.
-    // java.net.http.HttpClient performs HTTPS endpoint identification (hostname vs.
-    // certificate SAN) as an independent step, on by default even with a custom
-    // SSLContext — confirmed live: without disabling it too, every call failed with
-    // "No subject alternative DNS name matching central.stackrox.svc.cluster.local
-    // found," which had nothing to do with the URL being wrong.
+    // A *plain* X509TrustManager here is NOT enough — confirmed empirically (a local
+    // repro with a self-signed cert + java.net.http.HttpClient reproduced the exact
+    // live failure: "No subject alternative DNS name matching
+    // central.stackrox.svc.cluster.local found."). The JDK wraps a plain
+    // X509TrustManager passed to SSLContext.init() and, because JSSE can't assume a
+    // legacy-style trust manager performs endpoint identification itself, the wrapper
+    // enforces hostname/SAN checking on its own regardless of the delegate's trust
+    // decision. An earlier fix attempt (SSLParameters.setEndpointIdentificationAlgorithm(""))
+    // on top of the plain TrustManager did NOT fix this — same repro, same failure.
+    // The actual fix (confirmed by the same repro passing): implement the full
+    // X509ExtendedTrustManager, overriding all six methods (2-arg, Socket-arg, and
+    // SSLEngine-arg, both client and server) as no-ops, so JSSE calls them directly
+    // instead of wrapping/enforcing hostname checks on top.
     private final HttpClient httpClient = buildTrustingHttpClient();
 
     private static HttpClient buildTrustingHttpClient() {
         try {
-            TrustManager[] trustAll = new TrustManager[]{new X509TrustManager() {
+            TrustManager[] trustAll = new TrustManager[]{new X509ExtendedTrustManager() {
                 public void checkClientTrusted(X509Certificate[] chain, String authType) {}
                 public void checkServerTrusted(X509Certificate[] chain, String authType) {}
                 public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) {}
+                public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) {}
+                public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) {}
+                public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) {}
             }};
             SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(null, trustAll, new java.security.SecureRandom());
 
-            SSLParameters sslParameters = new SSLParameters();
-            sslParameters.setEndpointIdentificationAlgorithm(""); // disable hostname verification too
-
             return HttpClient.newBuilder()
                     .sslContext(ctx)
-                    .sslParameters(sslParameters)
                     .connectTimeout(Duration.ofSeconds(3))
                     .build();
         } catch (Exception e) {
