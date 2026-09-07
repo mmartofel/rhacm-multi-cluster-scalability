@@ -1,6 +1,8 @@
 package com.redhat.banking.dashboard;
 
+import io.smallrye.common.annotation.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -19,6 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Consumes(MediaType.APPLICATION_JSON)
 @ApplicationScoped
 public class DashboardResource {
+
+    @Inject
+    RhacsPoller rhacsPoller;
 
     @ConfigProperty(name = "ONPREM_GATEWAY_URL", defaultValue = "http://cluster-gateway:8080")
     String onpremGatewayUrl;
@@ -164,5 +169,25 @@ public class DashboardResource {
         } catch (Exception e) {
             return new ProxyResult(502, "{\"status\":\"unknown\",\"error\":\"gateway unreachable\"}");
         }
+    }
+
+    // Serves RhacsPoller's cached RHACS Central snapshot (security/risk data for
+    // banking-demo/banking-infra). Cheap — just reads a volatile field — so no
+    // @Blocking needed here, unlike the refresh endpoint below.
+    @GET
+    @Path("/compliance")
+    public Response getCompliance() {
+        return Response.ok(rhacsPoller.getSnapshot()).build();
+    }
+
+    // Forces an immediate re-poll of RHACS Central (backs the Compliance pane's
+    // manual refresh button) instead of waiting up to 30s for the next scheduled
+    // tick. Blocking because RhacsPoller.poll() makes synchronous HTTP calls.
+    @POST
+    @Path("/compliance/refresh")
+    @Blocking
+    public Response refreshCompliance() {
+        rhacsPoller.poll();
+        return Response.ok(rhacsPoller.getSnapshot()).build();
     }
 }

@@ -30,6 +30,19 @@ spec:
           value: http://ledger-service.banking-demo.svc.cluster.local:8080
         - name: CLOUD_LEDGER_URL
           value: http://cloud-ledger-service.banking-infra.svc.cluster.local:8080
+        - name: RHACS_CENTRAL_URL
+          value: https://central.stackrox.svc.cluster.local:443
+        - name: RHACS_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: rhacs-dashboard-credentials
+              key: token
+              # dashboard-backend is deployed/waited-on at bootstrap-phase2.sh Step 10,
+              # before the RHACS step (11) that creates this secret even runs — must
+              # stay optional so a fresh bootstrap doesn't fail waiting on this pod.
+              # RhacsPoller treats a blank token as "not configured" and degrades
+              # gracefully rather than crashing.
+              optional: true
         # CPU bumped from 100m/200m — confirmed live via cgroup cpu.stat on a sibling
         # JVM service (ledger-service): 784/4433 periods throttled (~17.7%), 109s of
         # accumulated throttled time within ~8 minutes of pod lifetime. JVM startup

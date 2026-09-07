@@ -410,6 +410,35 @@ ok "SecuredCluster applied on onprem (centralEndpoint=central.stackrox.svc.clust
 
 info "Sensor may take a few minutes to report Ready — check: oc get securedcluster onprem -n stackrox --context onprem"
 
+# Read-only RHACS API token for dashboard-backend's Compliance pane (issue #8) — a
+# scoped "Analyst" role token, not the admin password: least-privilege for a
+# standing service credential vs. a human console login. Tokens can't be
+# regenerated with the same value once issued, so gate on the secret already
+# existing (same idempotency pattern as the sensor-tls bundle checks above).
+if oc get secret rhacs-dashboard-credentials -n banking-demo --context onprem &>/dev/null; then
+  ok "rhacs-dashboard-credentials secret already exists on onprem — skipping token generation"
+else
+  info "Generating read-only RHACS API token for dashboard-backend"
+  TOKEN_JSON=$(curl -sk -u "admin:$CENTRAL_PASSWORD" \
+    -X POST "https://$CENTRAL_HOST/v1/apitokens/generate" \
+    -H "Content-Type: application/json" \
+    --data '{"name":"dashboard-readonly","role":"Analyst"}')
+  RHACS_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.token')
+  if [[ -z "$RHACS_TOKEN" || "$RHACS_TOKEN" == "null" ]]; then
+    fail "Failed to generate RHACS API token — response: $TOKEN_JSON"
+  fi
+  oc create secret generic rhacs-dashboard-credentials \
+    --from-literal=token="$RHACS_TOKEN" \
+    -n banking-demo --context onprem --dry-run=client -o yaml | oc apply -f - --context onprem
+  ok "rhacs-dashboard-credentials secret created on onprem"
+
+  # dashboard-backend was already deployed/waited-on at Step 10, before this secret
+  # existed — its RHACS_API_TOKEN env var (optional secretKeyRef) came up unset.
+  # Restart to pick up the now-available token.
+  oc rollout restart deployment/dashboard-backend -n banking-demo --context onprem
+  ok "dashboard-backend restarted to pick up RHACS_API_TOKEN"
+fi
+
 # ─── Phase 2 Checkpoint ───────────────────────────────────────────────────────
 echo ""
 echo "═══════════════════════════════════════════════════════"

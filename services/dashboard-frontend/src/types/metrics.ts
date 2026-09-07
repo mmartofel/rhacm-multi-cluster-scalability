@@ -57,3 +57,42 @@ export interface MetricsPayload {
   onpremCapacityTps: number;
   interconnectStatus: 'active' | 'broken' | 'unknown';
 }
+
+// REST-pulled (not WebSocket-pushed) — see ComplianceWidget.tsx. Mirrors
+// dashboard-backend's ComplianceSnapshot.java field-for-field.
+export interface ClusterSecurityHealth {
+  cluster: string;
+  healthStatus: string;
+  sensorHealthStatus: string;
+}
+
+export interface SeverityCounts {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface TopViolation {
+  policyName: string;
+  deploymentName: string;
+  cluster: string;
+  severity: string;
+  firstOccurred: number;
+}
+
+export interface ComplianceSnapshot {
+  available: boolean;
+  error: string | null;
+  lastUpdated: number;
+  clusters: ClusterSecurityHealth[];
+  severity: SeverityCounts;
+  topViolations: TopViolation[];
+  numAlerts: number;
+  numImages: number;
+  numDeployments: number;
+  numNodes: number;
+  numSecrets: number;
+  imagesScanned: number;
+  imagesWithCriticalVulns: number;
+}
