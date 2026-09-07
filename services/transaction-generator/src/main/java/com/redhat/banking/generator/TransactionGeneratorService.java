@@ -72,7 +72,13 @@ public class TransactionGeneratorService {
                 bootstrap, tpsRate, Arrays.toString(ownedPartitions));
     }
 
-    @Scheduled(every = "1s", delay = 5, delayUnit = TimeUnit.SECONDS)
+    // The @ApplicationScoped bean (and its injected emitter) is only constructed
+    // lazily on the first scheduled tick. Confirmed live: the outgoing Kafka
+    // channel can take ~9-10s to finish wiring, so a 5s delay left the first
+    // several ticks failing bean construction with SRMSG00019 ("Unable to
+    // connect an emitter with the channel"), each logged as a full ERROR stack
+    // trace. 15s leaves a safe margin.
+    @Scheduled(every = "1s", delay = 15, delayUnit = TimeUnit.SECONDS)
     void generateBatch() {
         int rate = tpsRate;
         for (int i = 0; i < rate; i++) {

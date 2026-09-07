@@ -51,17 +51,29 @@ spec:
           limits:
             cpu: 200m
             memory: 512Mi
+        # Kafka + JTA + Avro startup can take 60-90s under real cluster conditions
+        # (RHSI tunnel latency, Kafka bootstrap, cold JIT) — the startupProbe gates
+        # liveness/readiness until the app is genuinely ready, instead of racing a
+        # fixed initialDelaySeconds against a variable startup time (confirmed live:
+        # this exact race killed ledger-service via a liveness-probe SIGTERM at ~70s
+        # against a 65.5s real startup, restart count 1 — see CLAUDE.md issue #17).
+        startupProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 30
         readinessProbe:
           httpGet:
             path: /health/ready
             port: 8080
-          initialDelaySeconds: 25
+          initialDelaySeconds: 0
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health/live
             port: 8080
-          initialDelaySeconds: 40
+          initialDelaySeconds: 0
           periodSeconds: 15
       imagePullSecrets:
       - name: quay-pull-secret

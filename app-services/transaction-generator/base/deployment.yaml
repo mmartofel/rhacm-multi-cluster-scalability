@@ -40,17 +40,26 @@ spec:
           limits:
             cpu: 200m
             memory: 512Mi
+        # See ledger-service/base/deployment.yaml for the full writeup: a
+        # startupProbe decouples liveness/readiness from real startup time
+        # instead of racing a fixed initialDelaySeconds against it.
+        startupProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 30
         readinessProbe:
           httpGet:
             path: /health/ready
             port: 8080
-          initialDelaySeconds: 20
+          initialDelaySeconds: 0
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health/live
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 0
           periodSeconds: 15
       imagePullSecrets:
       - name: quay-pull-secret

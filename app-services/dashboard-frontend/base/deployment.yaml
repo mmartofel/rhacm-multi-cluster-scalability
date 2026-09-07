@@ -28,17 +28,25 @@ spec:
           limits:
             cpu: 200m
             memory: 128Mi
+        # nginx/static content, no Kafka/DB dependency — short budget is enough
+        # (see ledger-service/base/deployment.yaml for the full startupProbe writeup).
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8080
+          periodSeconds: 3
+          failureThreshold: 10
         readinessProbe:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 10
+          initialDelaySeconds: 0
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 15
+          initialDelaySeconds: 0
           periodSeconds: 15
       imagePullSecrets:
       - name: quay-pull-secret
