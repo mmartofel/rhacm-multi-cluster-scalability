@@ -46,6 +46,15 @@ spec:
       # proportionally so MM2 replication throughput doesn't become the new
       # bottleneck (previously ran on the implicit single-task default).
       tasksMax: 4
+      # A transient RHSI/Skupper DNS resolution blip for kafka-bootstrap-mm2 at
+      # connector-start time (same class of issue as the Apicurio DNS blip in
+      # CLAUDE.md's Chaos Scenario finding 6) fails the connector's start() —
+      # and unlike a Kafka client, Kafka Connect never retries a FAILED
+      # connector on its own. autoRestart lets the Strimzi operator itself
+      # detect FAILED and restart on a backoff schedule, self-healing without
+      # needing bootstrap-phase1.sh re-run or manual intervention.
+      autoRestart:
+        enabled: true
       config:
         replication.factor: "3"
         offset-syncs.topic.replication.factor: "3"
