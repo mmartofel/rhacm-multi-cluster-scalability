@@ -98,12 +98,12 @@ export default function LinkFailurePanel({ payload }: Props) {
             <line x1="4" y1="40" x2="196" y2="40" stroke={color} strokeWidth={4} strokeLinecap="round" />
             {active && [0, 1, 2].map(i => (
               <circle key={i} r={6} fill={CLOUD_COLOR}>
-                <animateMotion dur="2s" repeatCount="indefinite" begin={`${i * 0.66}s`} path="M4,40 L196,40" />
+                <animateMotion dur="6s" repeatCount="indefinite" begin={`${i * 1.98}s`} path="M4,40 L196,40" />
               </circle>
             ))}
             {active && [0, 1].map(i => (
               <circle key={`r${i}`} r={5} fill={ONPREM_COLOR}>
-                <animateMotion dur="2.4s" repeatCount="indefinite" begin={`${i * 1.2}s`} path="M196,40 L4,40" />
+                <animateMotion dur="7.2s" repeatCount="indefinite" begin={`${i * 3.6}s`} path="M196,40 L4,40" />
               </circle>
             ))}
           </svg>
