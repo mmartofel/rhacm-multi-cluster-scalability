@@ -2,9 +2,11 @@ package com.redhat.banking.generator;
 
 import com.redhat.banking.TransactionEvent;
 import com.redhat.banking.TransactionType;
+import io.quarkus.logging.Log;
 import io.quarkus.scheduler.Scheduled;
 import java.util.concurrent.TimeUnit;
 import io.smallrye.reactive.messaging.kafka.api.OutgoingKafkaRecordMetadata;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -14,8 +16,10 @@ import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Metadata;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 @ApplicationScoped
@@ -59,6 +63,14 @@ public class TransactionGeneratorService {
     }
 
     private final AtomicLong droppedNoDemand = new AtomicLong(0);
+    private final AtomicBoolean demandOk = new AtomicBoolean(true);
+
+    @PostConstruct
+    void logStartupConfig() {
+        String bootstrap = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092");
+        Log.infof("transaction-generator starting: topic=transactions-raw bootstrap=%s initialTpsRate=%d ownedPartitions=%s",
+                bootstrap, tpsRate, Arrays.toString(ownedPartitions));
+    }
 
     @Scheduled(every = "1s", delay = 5, delayUnit = TimeUnit.SECONDS)
     void generateBatch() {
@@ -71,7 +83,15 @@ public class TransactionGeneratorService {
             // harmless, unlike letting the exception abort the rest of this tick's loop.
             if (!emitter.hasRequests()) {
                 droppedNoDemand.incrementAndGet();
+                if (demandOk.compareAndSet(true, false)) {
+                    Log.warnf("Kafka producer has no downstream demand — dropping synthetic transactions (droppedSoFar=%d)",
+                            droppedNoDemand.get());
+                }
                 continue;
+            }
+            if (demandOk.compareAndSet(false, true)) {
+                Log.infof("Kafka producer demand RESTORED — resuming transaction generation (droppedTotal=%d)",
+                        droppedNoDemand.get());
             }
 
             String accountId = ACCOUNTS[random.nextInt(ACCOUNTS.length)];
@@ -93,7 +113,10 @@ public class TransactionGeneratorService {
                             .withKey(accountId)
                             .withPartition(partition)
                             .build())));
-            generated.incrementAndGet();
+            long total = generated.incrementAndGet();
+            if (total % 1000 == 0) {
+                Log.infof("Generated %,d transactions so far (tpsRate=%d)", total, rate);
+            }
         }
     }
 
@@ -110,6 +133,11 @@ public class TransactionGeneratorService {
     }
 
     public void setTpsRate(int rate) {
-        this.tpsRate = Math.max(0, Math.min(rate, 10000));
+        int clamped = Math.max(0, Math.min(rate, 10000));
+        int old = this.tpsRate;
+        this.tpsRate = clamped;
+        if (clamped != old) {
+            Log.infof("TPS rate changed: %d -> %d", old, clamped);
+        }
     }
 }
