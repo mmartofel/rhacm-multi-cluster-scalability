@@ -29,12 +29,19 @@ spec:
           value: "100"
         - name: QUARKUS_VERTX_MAX_EVENT_LOOP_EXECUTE_TIME
           value: "PT10S"
+        # CPU bumped from 100m/300m — confirmed live via cgroup cpu.stat on a sibling
+        # JVM service (ledger-service): 784/4433 periods throttled (~17.7%), 109s of
+        # accumulated throttled time within ~8 minutes of pod lifetime. JVM startup
+        # (JIT, CDI/Kubernetes-client bootstrap) is CPU-heavy and was starved by the
+        # old limit; nodes have massive headroom (max 56% CPU utilization observed
+        # across the cluster), so there's no scheduling-pressure reason to keep it
+        # this tight.
         resources:
           requests:
-            cpu: 100m
+            cpu: 200m
             memory: 128Mi
           limits:
-            cpu: 300m
+            cpu: 750m
             memory: 256Mi
         # See ledger-service/base/deployment.yaml for the full writeup: a
         # startupProbe decouples liveness/readiness from real startup time

@@ -33,12 +33,19 @@ spec:
           value: onprem
         - name: OWNED_PARTITIONS
           value: "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"
+        # CPU bumped from 100m/200m — confirmed live via cgroup cpu.stat on a sibling
+        # JVM service (ledger-service): 784/4433 periods throttled (~17.7%), 109s of
+        # accumulated throttled time within ~8 minutes of pod lifetime. JVM startup
+        # (JIT, CDI/Kafka-producer bootstrap) is CPU-heavy and was starved by the old
+        # limit — plausibly contributing to the emitter-channel-wiring race this
+        # service already has a delayed @Scheduled start for. Nodes have massive
+        # headroom (max 56% CPU utilization observed across the cluster).
         resources:
           requests:
-            cpu: 100m
+            cpu: 200m
             memory: 256Mi
           limits:
-            cpu: 200m
+            cpu: 750m
             memory: 512Mi
         # See ledger-service/base/deployment.yaml for the full writeup: a
         # startupProbe decouples liveness/readiness from real startup time

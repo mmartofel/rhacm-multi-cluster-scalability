@@ -40,12 +40,18 @@ spec:
           value: "3"
         - name: QUARKUS_DATASOURCE_JDBC_MIN_SIZE
           value: "1"
+        # CPU bumped from 100m/200m — confirmed live via cgroup cpu.stat on a sibling
+        # JVM service (ledger-service): 784/4433 periods throttled (~17.7%), 109s of
+        # accumulated throttled time within ~8 minutes of pod lifetime. JVM startup
+        # (JIT, CDI/Hibernate/Kafka bootstrap) is CPU-heavy and was starved by the old
+        # limit; nodes have massive headroom (max 56% CPU utilization observed across
+        # the cluster), so there's no scheduling-pressure reason to keep it this tight.
         resources:
           requests:
-            cpu: 100m
+            cpu: 250m
             memory: 256Mi
           limits:
-            cpu: 200m
+            cpu: 1000m
             memory: 350Mi
         # See ledger-service/base/deployment.yaml for the full writeup: a
         # startupProbe decouples liveness/readiness from real (Kafka+JTA+DB)
