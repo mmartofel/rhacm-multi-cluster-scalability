@@ -10,6 +10,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.net.URI;
@@ -56,6 +57,14 @@ public class RhacsPoller {
     // the `curl -sk` precedent bootstrap-phase2.sh already uses against this exact
     // endpoint for init-bundle generation; it's an in-cluster call over the pod
     // network, not a call crossing a real trust boundary.
+    //
+    // Two separate checks need disabling to match `curl -sk`'s actual behavior — the
+    // trust-all TrustManager below only skips certificate *chain* validation.
+    // java.net.http.HttpClient performs HTTPS endpoint identification (hostname vs.
+    // certificate SAN) as an independent step, on by default even with a custom
+    // SSLContext — confirmed live: without disabling it too, every call failed with
+    // "No subject alternative DNS name matching central.stackrox.svc.cluster.local
+    // found," which had nothing to do with the URL being wrong.
     private final HttpClient httpClient = buildTrustingHttpClient();
 
     private static HttpClient buildTrustingHttpClient() {
@@ -67,7 +76,15 @@ public class RhacsPoller {
             }};
             SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(null, trustAll, new java.security.SecureRandom());
-            return HttpClient.newBuilder().sslContext(ctx).connectTimeout(Duration.ofSeconds(3)).build();
+
+            SSLParameters sslParameters = new SSLParameters();
+            sslParameters.setEndpointIdentificationAlgorithm(""); // disable hostname verification too
+
+            return HttpClient.newBuilder()
+                    .sslContext(ctx)
+                    .sslParameters(sslParameters)
+                    .connectTimeout(Duration.ofSeconds(3))
+                    .build();
         } catch (Exception e) {
             return HttpClient.newHttpClient();
         }
