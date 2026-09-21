@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 // Polls RHACS Central directly for security/risk data scoped to our app namespaces
 // (banking-demo, banking-infra) on both clusters. Central is a single onprem-only
@@ -48,8 +49,15 @@ public class RhacsPoller {
     @ConfigProperty(name = "RHACS_CENTRAL_URL", defaultValue = "https://central.stackrox.svc.cluster.local:443")
     String centralUrl;
 
-    @ConfigProperty(name = "RHACS_API_TOKEN", defaultValue = "")
-    String apiToken;
+    // Optional (not plain String): RHACS_API_TOKEN is genuinely unset until
+    // bootstrap-phase2.sh mints it. A plain String field with defaultValue = ""
+    // crashes Quarkus at boot — SmallRye's String converter treats a resolved ""
+    // as null, and eager @ConfigProperty validation rejects a null non-Optional
+    // field before any application code (including the isBlank() check below)
+    // ever runs. Optional<String> resolves to Optional.empty() instead, which
+    // eager validation accepts.
+    @ConfigProperty(name = "RHACS_API_TOKEN")
+    Optional<String> apiToken;
 
     private volatile ComplianceSnapshot snapshot = new ComplianceSnapshot();
 
@@ -112,7 +120,7 @@ public class RhacsPoller {
     }
 
     synchronized void poll() {
-        if (apiToken == null || apiToken.isBlank()) {
+        if (apiToken.isEmpty() || apiToken.get().isBlank()) {
             markUnavailable("RHACS_API_TOKEN not configured");
             return;
         }
@@ -284,7 +292,7 @@ public class RhacsPoller {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(5))
-                .header("Authorization", "Bearer " + apiToken)
+                .header("Authorization", "Bearer " + apiToken.orElse(""))
                 .GET()
                 .build();
         HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
