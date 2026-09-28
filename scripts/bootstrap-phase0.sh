@@ -62,6 +62,23 @@ wait_for "MultiClusterHub" 1200 \
     -o jsonpath='{.status.phase}' 2>/dev/null | grep -q '^Running$'"
 ok "MultiClusterHub running"
 
+# The MCH-created Search CR has no storageClassName, so search-postgres runs on
+# emptyDir and SearchPVCNotPresentCritical fires permanently (collector sync
+# traffic from 2+ clusters always exceeds its 100 req/30m "load" threshold).
+# Point it at whatever the cluster's default StorageClass is — never pinned.
+printf 'Waiting for Search CR search-v2-operator'
+wait_for "Search CR" 600 \
+  oc --context "${ONPREM}" get search search-v2-operator -n open-cluster-management
+DEFAULT_SC=$(oc --context "${ONPREM}" get sc \
+  -o jsonpath='{range .items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")]}{.metadata.name}{end}')
+if [[ -z "${DEFAULT_SC}" ]]; then
+  printf 'ERROR: no default StorageClass on %s — cannot give RHACM search a PVC\n' "${ONPREM}" >&2
+  exit 1
+fi
+oc --context "${ONPREM}" patch search search-v2-operator -n open-cluster-management --type=merge \
+  -p "{\"spec\":{\"dbStorage\":{\"storageClassName\":\"${DEFAULT_SC}\",\"size\":\"10Gi\"}}}"
+ok "Search DB storage → ${DEFAULT_SC}"
+
 # ── Step d: Import cloud (spoke) cluster ────────────────────────────────────
 log "Step d: ManagedCluster import (hub: ${ONPREM}, spoke: ${CLOUD})"
 
