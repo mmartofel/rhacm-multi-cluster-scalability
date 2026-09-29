@@ -9,7 +9,12 @@ spec:
     kind: Deployment
     name: account-service
   minReplicas: 1
-  maxReplicas: 20
+  # Capped (was 20): every replica holds up to 3 default + 3 "read" pooled
+  # connections to the single shared onprem PostgreSQL (max_connections=100),
+  # which both clusters' services use. Confirmed live 2026-09-29: restart CPU
+  # spikes scaled account-service to 11 (onprem) + 13 (cloud) replicas and
+  # exhausted max_connections ("too many clients already") on both clusters.
+  maxReplicas: 4
   metrics:
   - type: Resource
     resource:

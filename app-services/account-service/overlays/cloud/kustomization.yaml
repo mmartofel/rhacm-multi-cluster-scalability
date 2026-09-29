@@ -16,14 +16,3 @@ patches:
   target:
     kind: Deployment
     name: account-service
-# Cap the CPU HPA: every replica holds up to QUARKUS_DATASOURCE_JDBC_MAX_SIZE
-# connections to the shared onprem PostgreSQL (max_connections=100). Confirmed
-# live 2026-09-29: rollout CPU spikes scaled this to 13 replicas and exhausted
-# max_connections ("too many clients already"), taking down BOTH clusters.
-- patch: |-
-    - op: replace
-      path: /spec/maxReplicas
-      value: 4
-  target:
-    kind: HorizontalPodAutoscaler
-    name: account-service
