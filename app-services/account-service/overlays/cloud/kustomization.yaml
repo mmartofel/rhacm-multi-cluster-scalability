@@ -13,6 +13,14 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/3/value
       value: "cloud"
+    # QUARKUS_DATASOURCE_JDBC_MAX_SIZE 3 -> 10: every apply holds a connection for
+    # several RHSI round trips + WAL fsync, and one pod serves all 12 active cloud
+    # processors — thread dump showed the 3-connection pool saturated with workers
+    # parked on AgroalSynchronizer (confirmed live 2026-09-29, ~110 ms/msg on cloud).
+    # The CPU-based HPA never scales this out since the pod is waiting, not busy.
+    - op: replace
+      path: /spec/template/spec/containers/0/env/4/value
+      value: "10"
   target:
     kind: Deployment
     name: account-service

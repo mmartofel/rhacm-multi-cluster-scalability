@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.List;
 import java.util.Map;
 
 @Path("/api/accounts")
@@ -63,27 +64,32 @@ public class AccountResource {
         double delta = body.getOrDefault("delta", 0).doubleValue();
         Number versionParam = body.get("version");
 
-        int updated;
+        // RETURNING hands back the new balance/version from the UPDATE itself, saving the
+        // follow-up SELECT — one fewer DB round trip per apply, which on cloud crosses RHSI
+        // while holding one of this pod's few pooled connections (see CLAUDE.md).
+        List<?> rows;
         if (versionParam != null) {
-            updated = Account.getEntityManager()
+            rows = Account.getEntityManager()
                     .createNativeQuery(
                             "UPDATE accounts SET balance = balance + :delta, version = version + 1, last_updated = now() " +
-                            "WHERE account_id = :id AND version = :version AND (balance + :delta) >= 0")
+                            "WHERE account_id = :id AND version = :version AND (balance + :delta) >= 0 " +
+                            "RETURNING balance, version")
                     .setParameter("delta", delta)
                     .setParameter("id", accountId)
                     .setParameter("version", versionParam.longValue())
-                    .executeUpdate();
+                    .getResultList();
         } else {
-            updated = Account.getEntityManager()
+            rows = Account.getEntityManager()
                     .createNativeQuery(
                             "UPDATE accounts SET balance = balance + :delta, version = version + 1, last_updated = now() " +
-                            "WHERE account_id = :id AND (balance + :delta) >= 0")
+                            "WHERE account_id = :id AND (balance + :delta) >= 0 " +
+                            "RETURNING balance, version")
                     .setParameter("delta", delta)
                     .setParameter("id", accountId)
-                    .executeUpdate();
+                    .getResultList();
         }
 
-        if (updated == 0) {
+        if (rows.isEmpty()) {
             Account check = Account.findById(accountId);
             if (check == null) {
                 return Response.status(Response.Status.NOT_FOUND)
@@ -107,11 +113,11 @@ public class AccountResource {
             )).build();
         }
 
-        Account refreshed = Account.findById(accountId);
+        Object[] row = (Object[]) rows.get(0);
         return Response.ok(Map.of(
                 "accountId", accountId,
-                "newBalance", refreshed.balance,
-                "version",   refreshed.version,
+                "newBalance", (BigDecimal) row[0],
+                "version",   ((Number) row[1]).longValue(),
                 "success",   true,
                 "reason",    ""
         )).build();
