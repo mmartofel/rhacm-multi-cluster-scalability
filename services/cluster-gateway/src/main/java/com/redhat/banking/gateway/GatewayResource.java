@@ -25,6 +25,16 @@ import java.util.concurrent.atomic.AtomicLong;
 @ApplicationScoped
 public class GatewayResource {
 
+    // One shared client for every proxied call. Creating a new java.net.http.HttpClient
+    // per request (the previous pattern) starts a fresh SelectorManager thread plus
+    // executor/buffers each time, only reclaimed after GC — with dashboard-backend
+    // polling these endpoints every ~1s, container_threads sawtoothed 60<->300 and the
+    // pod sat at 230-245 MiB of a 256 MiB limit, OOMKilled ~5x/20h on both clusters
+    // (confirmed live 2026-09-29). Per-request .timeout(...) still applies.
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(2))
+            .build();
+
     private final String cluster = System.getenv().getOrDefault("SOURCE_CLUSTER", "unknown");
 
     @ConfigProperty(name = "TRAFFIC_WEIGHT", defaultValue = "100")
@@ -84,13 +94,12 @@ public class GatewayResource {
     @Blocking
     public Response setGeneratorTps(@PathParam("rate") int rate) {
         try {
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create("http://transaction-generator.banking-demo.svc.cluster.local:8080/api/generator/tps/" + Math.max(0, rate)))
                     .timeout(Duration.ofMillis(800))
                     .PUT(HttpRequest.BodyPublishers.noBody())
                     .build();
-            client.send(req, HttpResponse.BodyHandlers.discarding());
+            HTTP.send(req, HttpResponse.BodyHandlers.discarding());
         } catch (Exception ignored) {
         }
         return Response.ok(Map.of("tpsRate", rate)).build();
@@ -101,13 +110,12 @@ public class GatewayResource {
     @Blocking
     public Response processorStats() {
         try {
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create("http://transaction-processor.banking-demo.svc.cluster.local:8080/api/processor/stats"))
                     .timeout(Duration.ofMillis(400))
                     .GET()
                     .build();
-            String body = client.send(req, HttpResponse.BodyHandlers.ofString()).body();
+            String body = HTTP.send(req, HttpResponse.BodyHandlers.ofString()).body();
             return Response.ok(body).type(MediaType.APPLICATION_JSON).build();
         } catch (Exception e) {
             return Response.ok("{\"rejectedTotal\":0,\"rejectedByReason\":{}}").type(MediaType.APPLICATION_JSON).build();
@@ -119,13 +127,12 @@ public class GatewayResource {
     @Blocking
     public Response kafkaPartitionLag() {
         try {
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create("http://transaction-processor.banking-demo.svc.cluster.local:8080/api/processor/stats/partition-lag"))
                     .timeout(Duration.ofMillis(800))
                     .GET()
                     .build();
-            String body = client.send(req, HttpResponse.BodyHandlers.ofString()).body();
+            String body = HTTP.send(req, HttpResponse.BodyHandlers.ofString()).body();
             return Response.ok(body).type(MediaType.APPLICATION_JSON).build();
         } catch (Exception e) {
             return Response.ok("[]").type(MediaType.APPLICATION_JSON).build();
@@ -137,13 +144,12 @@ public class GatewayResource {
     @Blocking
     public Response kafkaTopics() {
         try {
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create("http://transaction-processor.banking-demo.svc.cluster.local:8080/api/processor/stats/kafka-topics"))
                     .timeout(Duration.ofMillis(1000))
                     .GET()
                     .build();
-            String body = client.send(req, HttpResponse.BodyHandlers.ofString()).body();
+            String body = HTTP.send(req, HttpResponse.BodyHandlers.ofString()).body();
             return Response.ok(body).type(MediaType.APPLICATION_JSON).build();
         } catch (Exception e) {
             return Response.ok("[]").type(MediaType.APPLICATION_JSON).build();

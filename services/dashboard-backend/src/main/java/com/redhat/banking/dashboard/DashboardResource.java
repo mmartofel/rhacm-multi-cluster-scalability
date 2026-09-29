@@ -121,16 +121,22 @@ public class DashboardResource {
         )).build();
     }
 
+    // One shared client instead of HttpClient.newHttpClient() per call — each new
+    // client starts its own SelectorManager thread + buffers, only reclaimed after GC;
+    // the same pattern OOMKilled cluster-gateway (see CLAUDE.md, 2026-09-29).
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(2))
+            .build();
+
     private boolean httpPut(String url, String jsonBody) {
         try {
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofMillis(800))
                     .header("Content-Type", "application/json")
                     .PUT(HttpRequest.BodyPublishers.ofString(jsonBody))
                     .build();
-            HttpResponse<Void> resp = client.send(req, HttpResponse.BodyHandlers.discarding());
+            HttpResponse<Void> resp = HTTP.send(req, HttpResponse.BodyHandlers.discarding());
             return resp.statusCode() >= 200 && resp.statusCode() < 300;
         } catch (Exception e) {
             return false;
@@ -158,13 +164,12 @@ public class DashboardResource {
 
     private ProxyResult httpPutForBody(String url) {
         try {
-            HttpClient client = HttpClient.newHttpClient();
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofMillis(800))
                     .PUT(HttpRequest.BodyPublishers.noBody())
                     .build();
-            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
             return new ProxyResult(resp.statusCode(), resp.body());
         } catch (Exception e) {
             return new ProxyResult(502, "{\"status\":\"unknown\",\"error\":\"gateway unreachable\"}");

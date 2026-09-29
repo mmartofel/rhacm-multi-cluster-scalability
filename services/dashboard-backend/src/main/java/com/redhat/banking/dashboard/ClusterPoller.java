@@ -41,6 +41,13 @@ public class ClusterPoller {
     @ConfigProperty(name = "CLOUD_LEDGER_URL", defaultValue = "http://cloud-ledger-service:8080")
     String cloudLedgerUrl;
 
+    // One shared client instead of HttpClient.newHttpClient() per call — each new
+    // client starts its own SelectorManager thread + buffers, only reclaimed after GC;
+    // the same pattern OOMKilled cluster-gateway (see CLAUDE.md, 2026-09-29).
+    private static final java.net.http.HttpClient HTTP = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(2))
+            .build();
+
     private final Map<String, Long> prevProcessed = new ConcurrentHashMap<>();
     private volatile long prevPollMs = 0;
 
@@ -155,12 +162,11 @@ public class ClusterPoller {
     }
 
     private String httpGet(String url, Duration timeout) throws Exception {
-        var client = java.net.http.HttpClient.newHttpClient();
         var request = java.net.http.HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(timeout)
                 .GET()
                 .build();
-        return client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
+        return HTTP.send(request, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
     }
 }
