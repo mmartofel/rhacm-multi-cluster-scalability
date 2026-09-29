@@ -11,7 +11,7 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 @ApplicationScoped
@@ -40,30 +40,40 @@ public class LedgerUpdater {
 
     private final AtomicLong processedCount = new AtomicLong(0);
 
+    // Batch mode (committed-in.batch=true): one DB transaction per Kafka poll instead of
+    // per record. Confirmed live (2026-09-29): one-transaction-per-record meant >=2 DB
+    // round trips per message, which on cloud go through RHSI to onprem PostgreSQL —
+    // capping the single ledger consumer at ~75 msg/s against ~137 msg/s produced, so
+    // ledger-updaters-cloud lag grew unbounded (~290k) with the pod's CPU nearly idle.
+    // Latency-bound, not partition-bound: more partitions wouldn't help a single pod.
     @Incoming("committed-in")
     @Blocking
-    public void onCommitted(TransactionCommitted event) {
+    public void onCommitted(List<TransactionCommitted> events) {
+        if (events.isEmpty()) {
+            return;
+        }
         Uni.createFrom().item(() -> QuarkusTransaction.requiringNew().call(() -> {
-            LedgerEntry entry = new LedgerEntry();
-            entry.accountId = event.getAccountId();
-            entry.runningBalance = BigDecimal.valueOf(event.getBalanceAfter());
-            entry.asOf = event.getProcessedAt();
-            entry.sourceCluster = event.getSourceCluster();
-            entry.persist();
+            for (TransactionCommitted event : events) {
+                LedgerEntry entry = new LedgerEntry();
+                entry.accountId = event.getAccountId();
+                entry.runningBalance = BigDecimal.valueOf(event.getBalanceAfter());
+                entry.asOf = event.getProcessedAt();
+                entry.sourceCluster = event.getSourceCluster();
+                entry.persist();
+            }
             return null;
         }))
                 .onFailure().retry().withBackOff(INITIAL_BACKOFF, MAX_BACKOFF).expireIn(RETRY_BUDGET.toMillis())
                 .onFailure().invoke(failure -> {
-                    Log.errorf(failure, "Giving up on persisting a ledger entry for account %s after retrying for "
+                    Log.errorf(failure, "Giving up on persisting a batch of %d ledger entries after retrying for "
                             + "%ds — marking the Kafka consumer channel unhealthy so the pod restarts and "
-                            + "redelivers this (never-acked) record", event.getAccountId(), RETRY_BUDGET.getSeconds());
+                            + "redelivers this (never-acked) batch", events.size(), RETRY_BUDGET.getSeconds());
                     healthState.markChannelFailed("committed-in", rootCause(failure));
                 })
                 .await().indefinitely();
 
-        processedCount.incrementAndGet();
-        Log.debugf("Ledger updated: account=%s balance=%.2f cluster=%s",
-                event.getAccountId(), event.getBalanceAfter(), event.getSourceCluster());
+        processedCount.addAndGet(events.size());
+        Log.debugf("Ledger updated: %d entries", events.size());
     }
 
     public long getProcessedCount() {
