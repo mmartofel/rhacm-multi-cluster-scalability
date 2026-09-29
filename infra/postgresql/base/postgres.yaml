@@ -5,6 +5,15 @@ metadata:
   namespace: banking-infra
 spec:
   postgresVersion: 16
+  # max_connections 100 -> 300: one onprem primary serves every service on BOTH
+  # clusters (cloud via RHSI). At 100 it was exhausted on 2026-09-29 ("too many
+  # clients already"), taking both clusters down. Needs a PG restart to apply —
+  # PGO rolling restart via the postgres-operator.crunchydata.com/restart annotation.
+  patroni:
+    dynamicConfiguration:
+      postgresql:
+        parameters:
+          max_connections: 300
   instances:
   - name: instance1
     replicas: 3

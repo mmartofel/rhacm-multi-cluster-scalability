@@ -44,8 +44,12 @@ spec:
             secretKeyRef:
               name: postgresql-credentials
               key: password
+        # 5 -> 2: the @Incoming handler is @Blocking (ordered), so each pod uses one
+        # connection at a time; the 2nd covers DatabaseConnectivityMonitor's probe.
+        # Up to 20 replicas per cluster share ONE onprem PostgreSQL across both
+        # clusters — see CLAUDE.md's max_connections budget note (2026-09-29).
         - name: QUARKUS_DATASOURCE_JDBC_MAX_SIZE
-          value: "5"
+          value: "2"
         - name: QUARKUS_DATASOURCE_JDBC_MIN_SIZE
           value: "1"
         # CPU bumped from 200m/300m — confirmed live via cgroup cpu.stat on a sibling
