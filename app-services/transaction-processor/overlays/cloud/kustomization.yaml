@@ -19,9 +19,12 @@ patches:
     - op: replace
       path: /spec/template/spec/containers/0/env/5/value
       value: "jdbc:postgresql://postgresql-primary.banking-infra.svc.cluster.local:5432/postgres"
+    # QUARKUS_DATASOURCE_JDBC_MAX_SIZE — was "20" here, i.e. up to 20 replicas x 20
+    # = 400 connections from cloud processors alone against one shared onprem
+    # PostgreSQL. The handler is serial, so it needs the same 2 as base.
     - op: replace
       path: /spec/template/spec/containers/0/env/8/value
-      value: "20"
+      value: "2"
   target:
     kind: Deployment
     name: transaction-processor
