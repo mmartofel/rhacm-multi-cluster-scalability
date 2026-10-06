@@ -17,6 +17,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the full architecture reference (services, data
   - `onprem` — will act as the RHACM hub
   - `cloud` — will act as the managed spoke
 - `oc` CLI (this repo uses `oc` exclusively — not `kubectl`)
+- `jq`, `curl` and `perl` on the machine running the scripts (used by the bootstrap checkpoints and the test scripts)
 - A Quay.io (or other registry) account/robot token to push built images
 - Cluster-admin access on both clusters
 - DNS resolving `*.apps.<cluster-domain>` for both clusters
@@ -125,7 +126,9 @@ The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & C
 
 ## Verifying the install
 
-Three test scripts answer "does it actually work?", from quick to thorough. All run from your laptop against the `onprem`/`cloud` contexts, need only `oc`, `jq` and `curl`, and exit non-zero on failure.
+Three test scripts answer "does it actually work?", from quick to thorough. All run from your laptop against the `onprem`/`cloud` contexts and need `oc`, `jq`, `curl` and `perl`.
+
+Exit codes are the same for all three: `0` every check passed, `1` at least one check failed, `2` the script could not run (for example a cluster is unreachable or a token has expired — see "Refreshing an expired token").
 
 ```bash
 ./scripts/smoke-test.sh        # ~3 min  — real transactions through both clusters + dashboard checks
@@ -137,9 +140,11 @@ Three test scripts answer "does it actually work?", from quick to thorough. All 
 |---|---|
 | `smoke-test.sh` | Everything is Ready; a short burst on **each** cluster is produced, committed to PostgreSQL and written to the ledger with exact accounting (produced = committed + DLQ); MirrorMaker 2 mirrors one-for-one; the dashboard, its API proxies and the WebSocket feed work. Also runs automatically at the end of `bootstrap-phase2.sh`. |
 | `log-scan.sh` | No known-bad log signature (`scripts/log-scan-signatures.txt`), no `ERROR` line outside the allowlist (`scripts/log-scan-allowlist.txt`), no unexplained database connectivity loss, no restarts/OOMKills in the window, all pods Ready, every consumer group has members. |
-| `acceptance-test.sh` | The full verdict: KEDA scales processors out and back, the interconnect break/restore cycle degrades only cloud and heals with zero restarts, and account balances, ledger and Kafka offsets still agree afterwards. Writes a report to `test-reports/`. |
+| `acceptance-test.sh` | The full verdict: KEDA scales processors out and back, the interconnect break/restore cycle degrades only cloud and heals with zero restarts, and account balances, ledger and Kafka offsets still agree afterwards. Writes `test-reports/acceptance-<timestamp>.md` (stage table and findings) and `.log` (full output); the directory is git-ignored. |
 
 `acceptance-test.sh` generates load and makes onprem unreachable from cloud for a few minutes — use it on demo/sandbox environments only. A new harmless `ERROR` message will fail `log-scan.sh` until it is added to the allowlist with a reason; that is intentional.
+
+> **Known failure:** the acceptance test's `consistency` stage currently fails, and is expected to until two open defects are fixed — balance updates applied twice for one transaction ([#20](https://github.com/mmartofel/rhacm-multi-cluster-scalability/issues/20)) and a ledger batch written twice across an interconnect break ([#21](https://github.com/mmartofel/rhacm-multi-cluster-scalability/issues/21)). The `smoke`, `autoscale`, `chaos` and `logs` stages pass. Lines marked `FINDING (report only)` never fail a run.
 
 Other useful checks:
 
@@ -167,6 +172,8 @@ oc login https://api.<cluster-domain>:6443   # re-authenticate to onprem or clou
 ## Applying config/code changes after install
 
 Restarting a pod does **not** rebuild its image — it just re-pulls the existing tag. To pick up source changes, re-run `./scripts/bootstrap-phase2.sh` (triggers new Tekton builds; Argo CD rolls out the new image automatically). Use `./rollout.sh` to force a rollout restart of all `banking-demo` deployments on both clusters after a sync.
+
+**`bootstrap-phase2.sh` resets the database on every run** — it drops and recreates `accounts`, `transactions` and `ledger_entries` (`scripts/schema.sql`) and rebuilds all 7 images. That also clears any balance or ledger discrepancies the acceptance test has reported. To rebuild a single service without touching data, trigger one Tekton `PipelineRun` for it and restart only that deployment — see "Quick operational references" in [`CLAUDE.md`](CLAUDE.md).
 
 Every infra/app manifest under `infra/` and `app-services/` is Argo CD-managed (`selfHeal: true`) once Phase 1/2 have registered the `ApplicationSet`s — always `git push` a manifest change before (or instead of) applying it directly with `oc apply`, or Argo will silently revert your live change back to whatever's still in git on its next reconcile. Argo's default git poll interval means a pushed fix can take a few minutes to land on its own; to apply it immediately (e.g. mid-incident), force a refresh instead of waiting:
 
