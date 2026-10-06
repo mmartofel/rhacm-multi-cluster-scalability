@@ -130,7 +130,7 @@ Three test scripts answer "does it actually work?", from quick to thorough. All 
 ```bash
 ./scripts/smoke-test.sh        # ~3 min  — real transactions through both clusters + dashboard checks
 ./scripts/log-scan.sh          # ~1 min  — scan pod logs and health over the last 15 min (--since 2h to widen)
-./scripts/acceptance-test.sh   # ~40 min — smoke + autoscaling + interconnect chaos + data consistency + log scan
+./scripts/acceptance-test.sh   # ~30 min — smoke + autoscaling + interconnect chaos + data consistency + log scan
 ```
 
 | Script | What it proves |

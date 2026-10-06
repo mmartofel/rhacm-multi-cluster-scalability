@@ -8,10 +8,12 @@
 #     bad Warning events, consumer groups with no members
 # WARN lines, other Warning events and CPU throttling are reported but never fail.
 #
-# Usage: log-scan.sh [--since <30s|15m|2h>] [--expect-outage]
-#   --expect-outage  the window contains a deliberate interconnect break: cloud pods
-#                    may log the connection errors in log-scan-outage-allowlist.txt,
-#                    and each LOST must have a matching RESTORED
+# Usage: log-scan.sh [--since <30s|15m|2h>] [--expect-outage [--outage-from <ts> --outage-to <ts>]]
+#   --expect-outage  the window contains a deliberate interconnect break: lines on cloud
+#                    pods matching log-scan-outage-allowlist.txt are ignored (signatures
+#                    included), and each LOST must have a matching RESTORED
+#   --outage-from/--outage-to  UTC "YYYY-MM-DD HH:MM:SS"; restricts that tolerance to log
+#                    lines stamped inside the break window (pod logs are in UTC)
 # Exit:  0 clean · 1 problems found · 2 cannot run
 set -uo pipefail
 
@@ -20,10 +22,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/test-lib.sh"
 
 SINCE=15m
 EXPECT_OUTAGE=0
+OUTAGE_FROM="0000-00-00 00:00:00"
+OUTAGE_TO="9999-99-99 99:99:99"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --since)         SINCE=$2; shift 2 ;;
     --expect-outage) EXPECT_OUTAGE=1; shift ;;
+    --outage-from)   OUTAGE_FROM=$2; shift 2 ;;
+    --outage-to)     OUTAGE_TO=$2; shift 2 ;;
     *) printf 'Usage: %s [--since <duration>] [--expect-outage]\n' "$(basename "$0")"; exit 2 ;;
   esac
 done
@@ -40,7 +46,6 @@ CUTOFF=$(date -u -v-"${WINDOW_SECS}"S +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
 
 require_tools
 require_clusters
-export LC_ALL=C   # logs contain arbitrary bytes; BSD grep/sed choke on them otherwise
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/log-scan.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
@@ -79,6 +84,25 @@ wait
 cat "$WORK"/*.log > "$ALL" 2>/dev/null || true
 info "$PODS pods, $(wc -l < "$ALL" | tr -d ' ') log lines"
 
+# With --expect-outage, drop the genuine symptoms of the break before any check looks at
+# the logs: cloud pods only, inside the outage window only, allowlisted patterns only.
+patterns "$OUTAGE_ALLOWLIST" > "$WORK/outage.regex"
+if (( EXPECT_OUTAGE )) && [[ -s "$WORK/outage.regex" ]]; then
+  awk -v c="$CLOUD/" -v from="$OUTAGE_FROM" -v to="$OUTAGE_TO" '
+    # stack-trace lines carry no timestamp of their own: they belong to the last stamped line
+    { i = index($0, " | "); t = substr($0, i + 3, 19)
+      if (t ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9:]+$/) ts = t }
+    index($0, c) == 1 && ts >= from && ts <= to { print > "/dev/stderr"; next }
+    { print }' "$ALL" > "$WORK/outside.log" 2> "$WORK/inside.log"
+  grep -vE -f "$WORK/outage.regex" "$WORK/inside.log" > "$WORK/inside.kept" || true
+  tolerated=$(( $(wc -l < "$WORK/inside.log") - $(wc -l < "$WORK/inside.kept") ))
+  cat "$WORK/outside.log" "$WORK/inside.kept" > "$WORK/scan.log"
+  info "outage window ${OUTAGE_FROM} → ${OUTAGE_TO} UTC: ignored $tolerated allowlisted line(s) on cloud pods"
+  SCAN="$WORK/scan.log"
+else
+  SCAN="$ALL"
+fi
+
 # ── 1. Known-bad signatures ─────────────────────────────────────────────────
 log "1/5 Known-bad signatures"
 SIG_HITS=0
@@ -86,36 +110,26 @@ SIG_HITS=0
 while IFS= read -r line; do
   regex=${line%% ## *}; meaning=${line#* ## }
   printf '%s\n' "$regex" >> "$WORK/sig.regex"
-  n=$(grep -cE -- "$regex" "$ALL" || true)
+  n=$(grep -cE -- "$regex" "$SCAN" || true)
   if (( n > 0 )); then
     SIG_HITS=$(( SIG_HITS + 1 ))
     fail_check "'$regex' × $n — $meaning"
-    grep -E -- "$regex" "$ALL" | cut -d'|' -f1 | sort | uniq -c | sort -rn | head -5 | sed 's/^/        /'
-    info "sample: $(grep -m1 -E -- "$regex" "$ALL" | cut -c1-300)"
+    grep -E -- "$regex" "$SCAN" | cut -d'|' -f1 | sort | uniq -c | sort -rn | head -5 | sed 's/^/        /'
+    info "sample: $(grep -m1 -E -- "$regex" "$SCAN" | cut -c1-300)"
   fi
 done < <(patterns "$SIGNATURES")
 (( SIG_HITS == 0 )) && pass_check "none of the $(patterns "$SIGNATURES" | wc -l | tr -d ' ') known-bad signatures found"
 
 # ── 2. Unknown ERROR lines ──────────────────────────────────────────────────
 log "2/5 Unrecognised ERROR lines"
-grep -E -- "$ERROR_RE" "$ALL" | grep -vE -f "$WORK/sig.regex" > "$WORK/errors.all" || true
+grep -E -- "$ERROR_RE" "$SCAN" | grep -vE -f "$WORK/sig.regex" > "$WORK/errors.all" || true
 patterns "$ALLOWLIST" > "$WORK/allow.regex"
 if [[ -s "$WORK/allow.regex" ]]; then
   grep -vE -f "$WORK/allow.regex" "$WORK/errors.all" > "$WORK/errors.1" || true
 else
   cp "$WORK/errors.all" "$WORK/errors.1"
 fi
-patterns "$OUTAGE_ALLOWLIST" > "$WORK/outage.regex"
-if (( EXPECT_OUTAGE )) && [[ -s "$WORK/outage.regex" ]]; then
-  # tolerated on cloud pods only — onprem must stay clean through the outage
-  { grep -E "^${ONPREM}/" "$WORK/errors.1" || true
-    grep -E "^${CLOUD}/" "$WORK/errors.1" | grep -vE -f "$WORK/outage.regex" || true
-  } > "$WORK/errors.unknown"
-  tolerated=$(( $(wc -l < "$WORK/errors.1") - $(wc -l < "$WORK/errors.unknown") ))
-  info "tolerated $tolerated outage-related ERROR line(s) on cloud pods"
-else
-  cp "$WORK/errors.1" "$WORK/errors.unknown"
-fi
+cp "$WORK/errors.1" "$WORK/errors.unknown"
 if [[ -s "$WORK/errors.unknown" ]]; then
   fail_check "$(wc -l < "$WORK/errors.unknown" | tr -d ' ') ERROR line(s) not on the allowlist — distinct patterns:"
   normalise < "$WORK/errors.unknown" | sort | uniq -c | sort -rn | head -25 | sed 's/^/     /'

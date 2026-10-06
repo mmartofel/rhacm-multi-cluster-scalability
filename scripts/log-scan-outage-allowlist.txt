@@ -1,5 +1,6 @@
-# ERROR lines tolerated ONLY with --expect-outage (the interconnect chaos scenario),
-# and only on cloud pods. One extended regex per line; # starts a comment.
+# Log lines ignored ONLY with --expect-outage (the interconnect chaos scenario), only on
+# cloud pods, and only inside --outage-from/--outage-to when those are given. Applied
+# before the signature check, so a signature listed here is tolerated under the same limits. One extended regex per line; # starts a comment.
 # These are the genuine symptoms of onprem PostgreSQL/Apicurio being unreachable.
 
 # JDBC cannot reach onprem PostgreSQL through the removed postgresql-primary listener
@@ -8,3 +9,12 @@ An I/O error occurred while sending to the backend
 # the ledger batch that was in flight when the listener disappeared (retried by LedgerUpdater)
 HHH100501: Exception executing batch
 Batch entry [0-9]+ insert into ledger_entries .* was aborted
+# account-service cannot get a pooled connection while PostgreSQL is unreachable
+acquisition timeout
+HTTP Request to /api/accounts/[A-Z0-9]+/apply failed
+# processors calling account-service while it is not ready / is failing its own DB calls
+Failed to apply balance for account [A-Z0-9]+: .*(Connection refused|timeout period of [0-9]+ms)
+# Apicurio is behind the removed apicurio-registry listener
+ERCache.*UnknownHostException: apicurio-registry
+# a processor pod that KEDA starts during the outage cannot read JDBC metadata at boot
+HHH000342

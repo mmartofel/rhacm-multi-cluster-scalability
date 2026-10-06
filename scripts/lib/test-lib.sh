@@ -6,6 +6,9 @@ TEST_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "${TEST_LIB_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${SCRIPTS_DIR}/.." && pwd)"
 export KUBECONFIG="${KUBECONFIG:-${REPO_ROOT}/kubeconfig-onprem:${REPO_ROOT}/kubeconfig-cloud}"
+# Numbers from psql/Kafka use "." decimals; a comma-decimal locale (e.g. pl_PL) makes awk
+# silently truncate them, and logs contain bytes BSD grep/sed reject outside the C locale.
+export LC_ALL=C
 
 ONPREM=onprem
 CLOUD=cloud
@@ -244,4 +247,8 @@ link_call() { backend PUT "/api/backend/link/$1" | jq -e --arg s "$2" '.status==
 backend_reaches_cloud_gateway() {
   [[ "$(oc_exec --context "$ONPREM" exec -n "$APP_NS" deploy/dashboard-backend -- curl -s -m 10 -o /dev/null -w '%{http_code}' \
         "http://cloud-cluster-gateway.$INFRA_NS.svc.cluster.local:8080/api/gateway/health" 2>/dev/null)" == "200" ]]
+}
+
+duplicate_ledger_rows() {
+  psql_onprem 'SELECT count(*) FROM (SELECT 1 FROM ledger_entries GROUP BY account_id, running_balance, as_of, source_cluster HAVING count(*) > 1) d'
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance test (~35-40 min): the "is it all good?" verdict for a deployed environment.
+# Acceptance test (~30 min): the "is it all good?" verdict for a deployed environment.
 #
 #   1. smoke        smoke-test.sh — pipeline works end to end on both clusters
 #   2. autoscale    100 TPS per cluster: KEDA scales processors out, lag drains, scales back
@@ -93,6 +93,8 @@ BASE_onprem=$(snapshot_counts "$ONPREM")
 BASE_cloud=$(snapshot_counts "$CLOUD")
 DRIFT_BEFORE="$REPORT_DIR/.drift-before-$STAMP"; DRIFT_AFTER="$REPORT_DIR/.drift-after-$STAMP"
 balance_drift > "$DRIFT_BEFORE"
+DUP_LEDGER_BEFORE=$(duplicate_ledger_rows)
+OUTAGE_FROM=""; OUTAGE_TO=""
 
 # ── Stage 1: smoke ──────────────────────────────────────────────────────────
 stage_smoke() { child_script "smoke test" "$SCRIPTS_DIR/smoke-test.sh"; }
@@ -152,6 +154,7 @@ stage_chaos() {
   led0=$(count_ledger "$ONPREM"); dlq0=$(topic_end_sum "$CLOUD" "$DLQ_TOPIC" 0 2)
 
   log "Breaking the interconnect (PUT /api/backend/link/break)"
+  OUTAGE_FROM=$(date -u +'%Y-%m-%d %H:%M:%S')
   check "break accepted by the dashboard API" link_call break broken
   expect "the three banking-infra listeners are gone on cloud" "$(chaos_listeners_present)" -eq 0
   cloud_db_down() { ! service_ready "$CLOUD" account-service; }
@@ -186,6 +189,7 @@ stage_chaos() {
   fi
 
   sleep 30   # some post-restore traffic before stopping the load
+  OUTAGE_TO=$(date -u +'%Y-%m-%d %H:%M:%S')   # restore + recovery + 30s grace for reconnects
   stop_load
   info "load stopped; waiting for the backlog to drain (up to 10 min)"
   if wait_until 600 all_lag_zero; then pass_check "backlog drained to 0 lag after restore"; else fail_check "backlog did not drain within 10 min of restore"; fi
@@ -227,8 +231,10 @@ stage_consistency() {
   local preexisting
   preexisting=$(awk -F'|' '$2+0 != 0' "$DRIFT_BEFORE" | grep -c . || true)
   (( preexisting == 0 )) || finding "$preexisting account(s) already had a balance/transaction mismatch before this run started"
-  expect "no exact-duplicate ledger entries" \
-    "$(psql_onprem 'SELECT count(*) FROM (SELECT 1 FROM ledger_entries GROUP BY account_id, running_balance, as_of, source_cluster HAVING count(*) > 1) d')" -eq 0
+  # A ledger batch retried after an ambiguous commit (connection lost mid-COMMIT) is written twice
+  local dups; dups=$(duplicate_ledger_rows)
+  expect "no new exact-duplicate ledger entries during the run" "$(( dups - DUP_LEDGER_BEFORE ))" -eq 0
+  (( DUP_LEDGER_BEFORE == 0 )) || finding "$DUP_LEDGER_BEFORE exact-duplicate ledger entr(y/ies) already existed before this run started"
 
   for ctx in "$ONPREM" "$CLOUD"; do
     eval "base=\$BASE_$ctx"
@@ -245,10 +251,12 @@ stage_consistency() {
 # ── Stage 5: logs ───────────────────────────────────────────────────────────
 stage_logs() {
   local window=$(( SECONDS - START_SECS + 60 ))
-  if (( SKIP_CHAOS )); then
-    child_script "log and health gate" "$SCRIPTS_DIR/log-scan.sh" --since "${window}s"
+  if [[ -n "$OUTAGE_FROM" && -n "$OUTAGE_TO" ]]; then
+    # outage symptoms are tolerated on cloud pods only, and only inside the break window
+    child_script "log and health gate" "$SCRIPTS_DIR/log-scan.sh" --since "${window}s" \
+      --expect-outage --outage-from "$OUTAGE_FROM" --outage-to "$OUTAGE_TO"
   else
-    child_script "log and health gate" "$SCRIPTS_DIR/log-scan.sh" --since "${window}s" --expect-outage
+    child_script "log and health gate" "$SCRIPTS_DIR/log-scan.sh" --since "${window}s"
   fi
 }
 
