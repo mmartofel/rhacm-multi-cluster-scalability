@@ -6,3 +6,4 @@ node_modules/
 dist/
 **/target/
 services/dashboard-frontend/build/
+test-reports/

@@ -546,13 +546,24 @@ else
   DASH_HOST="<dashboard-route-not-found>"
 fi
 
-# PostgreSQL has rows
-check "PostgreSQL: transactions table has rows" \
-  "oc exec -n banking-infra --context onprem $PG_POD -- psql -U postgres postgres -t -c 'SELECT COUNT(*) FROM transactions' 2>/dev/null | grep -qE '[1-9]'"
+# Whether transactions actually flow is verified by scripts/smoke-test.sh below — the
+# generators start at TPS 0, so a "table has rows" check here can never pass on a
+# fresh install.
 
 # RHACS
 check "RHACS Central Available (onprem)" \
   "oc get central stackrox-central -n stackrox --context onprem -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
+# The SecuredCluster CRs were applied moments ago in Step 11; collector, admission-control
+# and scanner pods need several minutes to start on a fresh cluster, so poll instead of
+# checking once (confirmed live 2026-10-06: Available ~10 min after apply).
+log "Waiting for RHACS SecuredClusters to become Available (up to 10 min)..."
+SC_DEADLINE=$((SECONDS + 600))
+while [[ $SECONDS -lt $SC_DEADLINE ]]; do
+  SC_ONPREM=$(oc get securedcluster onprem -n stackrox --context onprem -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)
+  SC_CLOUD=$(oc get securedcluster cloud -n stackrox --context cloud -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)
+  [[ "$SC_ONPREM" == "True" && "$SC_CLOUD" == "True" ]] && break
+  sleep 15
+done
 check "RHACS SecuredCluster Available (onprem, self-monitoring)" \
   "oc get securedcluster onprem -n stackrox --context onprem -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}' | grep -q True"
 check "RHACS SecuredCluster Available (cloud)" \
@@ -580,3 +591,15 @@ echo "Dashboard:  https://$DASH_HOST"
 echo "WS metrics: wss://$DASH_HOST/ws/metrics"
 echo "RHACS:      https://${CENTRAL_HOST:-<not-deployed>} (admin password: oc get secret central-htpasswd -n stackrox --context onprem -o jsonpath='{.data.password}' | base64 -d)"
 echo ""
+
+# ─── Smoke test ───────────────────────────────────────────────────────────────
+# The checkpoint above only proves resources exist and are Ready. The smoke test
+# drives a short burst of real transactions through both clusters and the dashboard.
+if [[ $FAIL -eq 0 ]]; then
+  log "Running smoke test (scripts/smoke-test.sh)"
+  "$SCRIPT_DIR/smoke-test.sh" || exit 1
+  echo "For the full verdict (autoscaling, chaos, data consistency, logs): ./scripts/acceptance-test.sh"
+else
+  echo "Skipping smoke test — fix the failed checkpoint items first, then run ./scripts/smoke-test.sh"
+  exit 1
+fi

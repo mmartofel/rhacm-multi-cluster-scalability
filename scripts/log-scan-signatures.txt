@@ -1,0 +1,19 @@
+# Known-bad log signatures. Any match in the scanned window fails the gate.
+# Not listed on purpose: SRMSG18224 ("consumer revoked re-balance listener") is logged at INFO on
+# every normal rebalance, e.g. each KEDA scale-down. A consumer that never rejoins is caught by
+# the "consumer group has live members" check in log-scan.sh instead.
+# Format: <extended regex> ## <what it means / where it is documented in CLAUDE.md>
+SRMSG00034 ## Kafka emitter demand exhausted — leaked credits after an Apicurio outage (Chaos finding 2)
+SRMSG18249 ## Unhandled deserialization failure — Kafka consumer fail-stops permanently (Chaos finding 6)
+SRMSG00019 ## Emitter not connected to its channel at startup (Issue #17, CPU-starved startup)
+HHH000342 ## Hibernate could not obtain JDBC metadata at startup (Issue #17, CPU-starved startup)
+too many clients already ## PostgreSQL max_connections exhausted (connection budget outage 2026-09-29)
+acquisition timeout ## Agroal pool exhausted or holding dead connections (JDBC self-healing note)
+could not be resolved ## nginx cannot resolve an upstream — wrong DNS resolver (dashboard 502, 2026-10-06)
+Thread blocked ## Vert.x event loop blocked — missing @Blocking on a JAX-RS method
+OutOfMemoryError ## JVM heap exhausted
+relation "[a-z_]+" does not exist ## Schema missing or reset while services were running (bootstrap-phase2.sh re-run)
+Enlisted connection used without active transaction ## @Blocking + @Transactional on an @Incoming handler
+kafka-consumer-channel.*DOWN ## Consumer retry budget exhausted — pod will be restarted by liveness
+SRMSG18228 ## A Kafka channel reported a failure — with the default fail strategy the consumer stops for good while the pod stays Ready
+SRMSG18231 ## A record waited longer than throttled.unprocessed-record-max-age.ms (60s) for its ack — the consumer is torn down (seen 2026-10-06: ledger-service retrying its DB write through an interconnect outage)

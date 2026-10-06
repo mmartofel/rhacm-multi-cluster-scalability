@@ -101,7 +101,7 @@ source quay.sh   # ensures QUAY_ORG, QUAY_USER, QUAY_TOKEN are set
 ./scripts/bootstrap-phase2.sh
 ```
 
-This builds all 7 service images via Tekton, applies the Skupper application-layer extensions, initializes the PostgreSQL schema, propagates DB credentials to both clusters, registers Avro schemas with Apicurio, grants Argo CD RBAC for `banking-demo`, applies the app `ApplicationSet`, waits for all pods, deploys RHACS Central (onprem) and registers cloud as a Sensor/`SecuredCluster` via an automated cluster-init bundle exchange, and ends with a Phase 2 checkpoint once everything is healthy.
+This builds all 7 service images via Tekton, applies the Skupper application-layer extensions, initializes the PostgreSQL schema, propagates DB credentials to both clusters, registers Avro schemas with Apicurio, grants Argo CD RBAC for `banking-demo`, applies the app `ApplicationSet`, waits for all pods, deploys RHACS Central (onprem) and registers cloud as a Sensor/`SecuredCluster` via an automated cluster-init bundle exchange, and ends with a Phase 2 checkpoint followed by the smoke test (`scripts/smoke-test.sh`).
 
 The RHACS console URL and a pointer to the auto-generated admin password (`central-htpasswd` secret) are printed at the end. Get the URL, username, and password:
 
@@ -124,6 +124,24 @@ oc --context onprem get route dashboard -n banking-demo -o jsonpath='https://{.s
 The dashboard streams live per-cluster metrics over WebSocket. Its **Traffic & Chaos** page has a Load Control panel (TPS / traffic-split) and a "Simulate Link Failure" control that performs a *real* RHSI chaos action — toggling it deletes or recreates the `kafka-bootstrap`/`postgresql-primary`/`apicurio-registry` Skupper Listeners on `cloud` (via `cluster-gateway`'s scoped Kubernetes RBAC), cutting off or restoring `cloud`'s access to onprem's Kafka/PostgreSQL/Apicurio so you can watch the cloud processor start rejecting transactions to the DLQ and `onprem` keep processing unaffected — all while the dashboard itself stays fully responsive, since it reaches `cloud` over a separate RHSI channel these Listeners don't touch. MirrorMaker 2 also stays unaffected and keeps mirroring `transactions-raw` throughout, since it runs over its own dedicated tunnel this toggle doesn't touch. See [`CLAUDE.md`](CLAUDE.md#chaos-scenario-rhsi-link-partition) for the mechanism.
 
 ## Verifying the install
+
+Three test scripts answer "does it actually work?", from quick to thorough. All run from your laptop against the `onprem`/`cloud` contexts, need only `oc`, `jq` and `curl`, and exit non-zero on failure.
+
+```bash
+./scripts/smoke-test.sh        # ~3 min  — real transactions through both clusters + dashboard checks
+./scripts/log-scan.sh          # ~1 min  — scan pod logs and health over the last 15 min (--since 2h to widen)
+./scripts/acceptance-test.sh   # ~40 min — smoke + autoscaling + interconnect chaos + data consistency + log scan
+```
+
+| Script | What it proves |
+|---|---|
+| `smoke-test.sh` | Everything is Ready; a short burst on **each** cluster is produced, committed to PostgreSQL and written to the ledger with exact accounting (produced = committed + DLQ); MirrorMaker 2 mirrors one-for-one; the dashboard, its API proxies and the WebSocket feed work. Also runs automatically at the end of `bootstrap-phase2.sh`. |
+| `log-scan.sh` | No known-bad log signature (`scripts/log-scan-signatures.txt`), no `ERROR` line outside the allowlist (`scripts/log-scan-allowlist.txt`), no unexplained database connectivity loss, no restarts/OOMKills in the window, all pods Ready, every consumer group has members. |
+| `acceptance-test.sh` | The full verdict: KEDA scales processors out and back, the interconnect break/restore cycle degrades only cloud and heals with zero restarts, and account balances, ledger and Kafka offsets still agree afterwards. Writes a report to `test-reports/`. |
+
+`acceptance-test.sh` generates load and makes onprem unreachable from cloud for a few minutes — use it on demo/sandbox environments only. A new harmless `ERROR` message will fail `log-scan.sh` until it is added to the allowlist with a reason; that is intentional.
+
+Other useful checks:
 
 ```bash
 # Re-run any phase's checkpoint independently
@@ -167,6 +185,9 @@ oc --context onprem annotate application.argoproj.io <app-name> -n openshift-git
 | `scripts/bootstrap-phase0.sh` | Phase 0: operator check → MCH → ManagedCluster import → GitOps readiness → namespaces → pull secrets → ClusterIssuer. Requires `QUAY_USER`/`QUAY_TOKEN`. |
 | `scripts/bootstrap-phase1.sh` | Phase 1: Argo CD registration/RBAC → Kafka/PostgreSQL → Skupper (RHSI) → MirrorMaker 2 → RHSI Network Observer → checkpoint. |
 | `scripts/bootstrap-phase2.sh` | Phase 2: Tekton image builds → Skupper app-layer → DB schema/credentials → Avro schema registration → Argo CD RBAC → app deploy → RHACS Central + SecuredCluster → checkpoint. Requires `QUAY_ORG`/`QUAY_USER`/`QUAY_TOKEN`. |
+| `scripts/smoke-test.sh [--tps N] [--duration S]` | ~3 min end-to-end smoke test on both clusters and the dashboard. |
+| `scripts/log-scan.sh [--since 15m] [--expect-outage]` | Log and health gate over a time window. |
+| `scripts/acceptance-test.sh [--keep-going] [--skip-autoscale] [--skip-chaos]` | Full acceptance run with a pass/fail report in `test-reports/`. |
 | `scripts/build-push-images-local.sh` | Fallback local image build (podman/docker) instead of Tekton. |
 | `get-kubeconfig.sh onprem\|cloud` | Save the current `oc login` session to the per-cluster kubeconfig file. |
 | `rollout.sh` | Force a rollout restart of all `banking-demo` deployments on both clusters. |

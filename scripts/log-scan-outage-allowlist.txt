@@ -1,0 +1,10 @@
+# ERROR lines tolerated ONLY with --expect-outage (the interconnect chaos scenario),
+# and only on cloud pods. One extended regex per line; # starts a comment.
+# These are the genuine symptoms of onprem PostgreSQL/Apicurio being unreachable.
+
+# JDBC cannot reach onprem PostgreSQL through the removed postgresql-primary listener
+The connection attempt failed
+An I/O error occurred while sending to the backend
+# the ledger batch that was in flight when the listener disappeared (retried by LedgerUpdater)
+HHH100501: Exception executing batch
+Batch entry [0-9]+ insert into ledger_entries .* was aborted

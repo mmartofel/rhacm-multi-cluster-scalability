@@ -1,0 +1,4 @@
+# Known-benign ERROR lines. One extended regex per line; lines starting with # are comments.
+# Add an entry only after confirming the message is harmless, and say why.
+
+# (empty on purpose: a healthy run on 2026-10-06 produced no ERROR lines at all)
