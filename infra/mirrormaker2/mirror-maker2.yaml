@@ -13,6 +13,13 @@ spec:
   # infra/skupper/{onprem/connectors,cloud/listeners}.yaml) instead of the plain/tls
   # listeners MM2 previously bootstrapped through — see CLAUDE.md finding 6.
   replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
   target:
     alias: cloud
     bootstrapServers: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092

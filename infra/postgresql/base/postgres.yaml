@@ -17,6 +17,23 @@ spec:
   instances:
   - name: instance1
     replicas: 3
+    # Explicit sizing (issue #23) — measured ~230Mi idle on the primary.
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    sidecars:
+      replicaCertCopy:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
     dataVolumeClaimSpec:
       accessModes: ["ReadWriteOnce"]
       resources:
@@ -25,8 +42,57 @@ spec:
   proxy:
     pgBouncer:
       replicas: 2
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 128Mi
+      sidecars:
+        pgbouncerConfig:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
   backups:
     pgbackrest:
+      repoHost:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+      jobs:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+      sidecars:
+        pgbackrest:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+        pgbackrestConfig:
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       repos:
       - name: repo1
         volume:

@@ -9,6 +9,15 @@ spec:
   replicas: 3
   roles:
   - controller
+  # Explicit sizing (issue #23): unbounded, the JVM sized its heap from the node.
+  # Measured ~0.5Gi working set per controller.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
   storage:
     type: persistent-claim
     size: 5Gi
@@ -25,6 +34,16 @@ spec:
   replicas: 3
   roles:
   - broker
+  # Explicit sizing (issue #23). Measured 1.5-1.75Gi working set per broker with no
+  # limit; with a limit set, Strimzi sizes the heap to half of it (2Gi), leaving the
+  # rest for page cache.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
   storage:
     type: jbod
     volumes:

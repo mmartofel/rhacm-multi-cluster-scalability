@@ -10,6 +10,24 @@ spec:
   instances:
   - name: instance1
     replicas: 1
+    # The instances list is replaced wholesale by this patch, so the sizing from
+    # base/postgres.yaml has to be repeated here.
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    sidecars:
+      replicaCertCopy:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
     dataVolumeClaimSpec:
       accessModes: ["ReadWriteOnce"]
       resources:
