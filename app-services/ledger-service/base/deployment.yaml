@@ -63,9 +63,13 @@ spec:
         # fixed initialDelaySeconds against a variable startup time (confirmed live:
         # this exact race killed ledger-service via a liveness-probe SIGTERM at ~70s
         # against a 65.5s real startup, restart count 1 — see CLAUDE.md issue #17).
+        # It probes /health/started, not /health/ready: readiness includes the DB
+        # check, so a pod created while the database is unreachable (e.g. a cloud
+        # pod during an interconnect outage) could never pass startup and would be
+        # killed every 150s. It now starts, stays NotReady, and recovers on its own.
         startupProbe:
           httpGet:
-            path: /health/ready
+            path: /health/started
             port: 8080
           periodSeconds: 5
           failureThreshold: 30
@@ -75,11 +79,15 @@ spec:
             port: 8080
           initialDelaySeconds: 0
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /health/live
             port: 8080
           initialDelaySeconds: 0
           periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
       imagePullSecrets:
       - name: quay-pull-secret

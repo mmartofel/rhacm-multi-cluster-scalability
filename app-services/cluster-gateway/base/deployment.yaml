@@ -52,21 +52,28 @@ spec:
         # instead of racing a fixed initialDelaySeconds against it.
         startupProbe:
           httpGet:
-            path: /health/ready
+            path: /health/started
             port: 8080
           periodSeconds: 5
           failureThreshold: 30
+        # Readiness is deliberately process-only (no downstream checks): this is a
+        # best-effort proxy, and the dashboard's interconnect "restore" call goes
+        # through it — it must stay Ready while the services behind it are down.
         readinessProbe:
           httpGet:
             path: /health/ready
             port: 8080
           initialDelaySeconds: 0
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /health/live
             port: 8080
           initialDelaySeconds: 0
           periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
       imagePullSecrets:
       - name: quay-pull-secret

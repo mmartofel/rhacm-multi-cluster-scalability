@@ -28,18 +28,28 @@ spec:
           value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: banking-kafka-kafka-bootstrap.banking-infra.svc.cluster.local:9092
+        # Same pattern as the app services: the startupProbe (150s budget) owns
+        # "wait for startup" instead of fixed initialDelaySeconds on the others.
+        startupProbe:
+          httpGet:
+            path: /health/started
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 30
         readinessProbe:
           httpGet:
             path: /health/ready
             port: 8080
-          initialDelaySeconds: 15
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /health/live
             port: 8080
-          initialDelaySeconds: 30
           periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           requests:
             cpu: 200m

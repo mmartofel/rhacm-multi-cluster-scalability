@@ -59,6 +59,11 @@ public class KafkaConnectivityMonitor {
         if (adminClient != null) adminClient.close();
     }
 
+    // Read by KafkaReadinessCheck.
+    public boolean isUp() {
+        return up.get();
+    }
+
     private void check() {
         boolean healthy;
         String cause = null;
