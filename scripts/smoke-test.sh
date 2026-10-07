@@ -146,6 +146,10 @@ else
   expect "dashboard → dashboard-backend proxy (/api/backend/compliance)" "$(http /api/backend/compliance)" -eq 200
   check "RHACS compliance snapshot available" bash -c \
     "curl -sk -m 10 https://$HOST/api/backend/compliance | jq -e '.available==true'"
+  # .available alone stays true when an individual Central endpoint fails (each
+  # count degrades to -1 on its own) — that hid a removed RHACS endpoint (issue #22).
+  check "RHACS compliance posture counts populated" bash -c \
+    "curl -sk -m 10 https://$HOST/api/backend/compliance | jq -e '[.numDeployments,.numSecrets,.numNodes,.imagesScanned,.imagesWithCriticalVulns] | all(. >= 0)'"
 
   WS=$(curl -sk -i -N --http1.1 --max-time 5 \
     -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
