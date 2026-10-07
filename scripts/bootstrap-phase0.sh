@@ -143,6 +143,11 @@ for ctx in "${ONPREM}" "${CLOUD}"; do
       --dry-run=client -o yaml | oc --context "${ctx}" apply -f -
     ok "${ctx}/${ns}"
   done
+  # ResourceQuota + LimitRange per namespace (needs cluster-admin, so not via Argo CD)
+  for limits in "${REPO_ROOT}"/infra/namespaces/*-limits.yaml; do
+    oc --context "${ctx}" apply -f "${limits}"
+    ok "${ctx}/$(basename "${limits}")"
+  done
 done
 
 log "Step g: Quay.io pull secret on both contexts"

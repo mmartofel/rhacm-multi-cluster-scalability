@@ -212,6 +212,16 @@ chaos_listeners_present() {
 }
 link_restore() { backend PUT /api/backend/link/restore >/dev/null; }
 
+# quota_present <ctx> <namespace> — the namespace has a ResourceQuota (infra/namespaces/)
+quota_present() {
+  [[ "$(oc --context "$1" get resourcequota -n "$2" --no-headers 2>/dev/null | wc -l)" -gt 0 ]]
+}
+# quota_rejections <ctx> <namespace> — number of pod creations the quota is refusing
+quota_rejections() {
+  oc --context "$1" get events -n "$2" --field-selector reason=FailedCreate --no-headers 2>/dev/null \
+    | grep -c 'exceeded quota' || true
+}
+
 # service_ready <ctx> <deployment> — the service's own readiness (includes its database check)
 service_ready() { svc_health "$1" "$2" /health/ready | jq -e '.status=="UP"' >/dev/null 2>&1; }
 
