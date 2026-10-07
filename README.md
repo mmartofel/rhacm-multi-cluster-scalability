@@ -79,6 +79,8 @@ export QUAY_TOKEN=<your-quay-robot-token>
 
 This runs the operator check, installs the RHACM `MultiClusterHub`, imports `cloud` as a `ManagedCluster`, waits for GitOps readiness, creates the app/infra/monitoring namespaces, propagates pull secrets, and applies the cert-manager `ClusterIssuer`.
 
+It also applies a `ResourceQuota` and `LimitRange` to `banking-demo` and `banking-infra` on both clusters (`infra/namespaces/*-limits.yaml`). These are applied by the script, not by Argo CD — after changing them, re-apply with `oc --context <ctx> apply -f infra/namespaces/<file>` on each cluster. See "Namespace resource limits" below.
+
 ## 5. Phase 1 — Kafka, PostgreSQL, Apicurio, cross-cluster mesh
 
 ```bash
@@ -182,6 +184,21 @@ oc --context onprem annotate application.argoproj.io <app-name> -n openshift-git
   argocd.argoproj.io/refresh=hard --overwrite
 # e.g. <app-name> = banking-kafka-onprem, banking-mirrormaker2, banking-demo-transaction-processor-cloud, ...
 ```
+
+## Namespace resource limits
+
+`banking-demo` and `banking-infra` each have a `ResourceQuota` (total CPU/memory requests and limits, pod count; plus PVC count and storage in `banking-infra`) and a `LimitRange` with default requests/limits for containers that set none. The sizing calculation is in a comment at the top of each file in `infra/namespaces/`.
+
+```bash
+# Current usage against the quota
+oc --context onprem describe quota -n banking-demo
+oc --context cloud  describe quota -n banking-infra
+
+# A quota that is too small shows up as pods that are never created
+oc --context cloud get events -n banking-demo --field-selector reason=FailedCreate
+```
+
+The quotas are sized for the current replica ceilings (20 `transaction-processor`, 4 `account-service`) with about 20% headroom. **Recalculate and re-apply them whenever you raise a replica ceiling or a container's requests/limits**, otherwise scale-out stops silently at the quota. `smoke-test.sh` fails if a quota is missing or is refusing pods.
 
 ## Scripts reference
 
