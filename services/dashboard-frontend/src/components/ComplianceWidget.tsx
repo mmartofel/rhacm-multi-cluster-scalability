@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ComplianceSnapshot, ClusterSecurityHealth, TopViolation } from '../types/metrics';
+import { ComplianceSnapshot, ClusterSecurityHealth, Violation, ViolationDetail } from '../types/metrics';
 import { ONPREM_COLOR, CLOUD_COLOR, HEALTHY_COLOR, CAPACITY_COLOR, GEN_COLOR } from '../colors';
 
 const UNKNOWN_COLOR = '#6a6e73';
@@ -40,6 +40,39 @@ function fmtTimestamp(ms: number): string {
   return new Date(ms).toLocaleTimeString();
 }
 
+function fmtDateTime(ms: number): string {
+  if (!ms) return '—';
+  return new Date(ms).toLocaleString();
+}
+
+// RUNTIME -> Runtime, FAIL_BUILD_ENFORCEMENT -> Fail build enforcement
+function fmtEnum(value: string): string {
+  const s = value.replace(/_/g, ' ').toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function clusterColor(cluster: string): string {
+  if (cluster === 'onprem') return ONPREM_COLOR;
+  if (cluster === 'cloud') return CLOUD_COLOR;
+  return UNKNOWN_COLOR;
+}
+
+const VIOLATION_COLUMNS = '90px minmax(0, 1.5fr) minmax(0, 1.1fr) 84px 76px';
+const SEVERITIES = ['CRITICAL_SEVERITY', 'HIGH_SEVERITY', 'MEDIUM_SEVERITY', 'LOW_SEVERITY'];
+type ClusterFilter = 'all' | 'onprem' | 'cloud';
+
+function Pill({ label, color }: { label: string; color: string }) {
+  return (
+    <span style={{
+      color, fontWeight: 700, fontSize: 11, background: `${color}18`,
+      border: `1px solid ${color}44`, borderRadius: 10, padding: '2px 8px',
+      textAlign: 'center', whiteSpace: 'nowrap',
+    }}>
+      {label}
+    </span>
+  );
+}
+
 function ClusterHealthCard({ health, accent }: { health: ClusterSecurityHealth; accent: string }) {
   const label = health.cluster === 'onprem' ? 'On-Prem' : 'Cloud';
   const overall = healthColor(health.healthStatus);
@@ -70,16 +103,42 @@ function ClusterHealthCard({ health, accent }: { health: ClusterSecurityHealth; 
   );
 }
 
-function SeverityBadge({ label, count, color }: { label: string; count: number; color: string }) {
+function SeverityBadge({ label, count, color, active, dimmed, onClick }: {
+  label: string; count: number; color: string; active: boolean; dimmed: boolean; onClick: () => void;
+}) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      background: `${color}18`, border: `1px solid ${color}44`,
-      borderRadius: 8, padding: '10px 16px', flex: 1, minWidth: 100,
-    }}>
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      title={active ? `Showing ${label} only — click to clear` : `Show only ${label} violations`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', textAlign: 'left',
+        background: `${color}${active ? '33' : '18'}`, border: `1px solid ${color}${active ? '' : '44'}`,
+        borderRadius: 8, padding: '8px 16px', flex: 1, minWidth: 100, opacity: dimmed ? 0.45 : 1,
+      }}
+    >
       <span style={{ fontSize: 22, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
       <span style={{ fontSize: 11, color: '#8a8d90' }}>{label}</span>
-    </div>
+    </button>
+  );
+}
+
+function FilterChip({ label, count, color, active, onClick }: {
+  label: string; count: number; color: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        cursor: 'pointer', fontSize: 11, fontWeight: 700, borderRadius: 10, padding: '3px 10px',
+        color: active ? color : '#8a8d90',
+        background: active ? `${color}22` : 'transparent',
+        border: `1px solid ${active ? color : '#3c3f42'}`,
+      }}
+    >
+      {label} <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.8 }}>{count}</span>
+    </button>
   );
 }
 
@@ -92,23 +151,180 @@ function StatTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ViolationRow({ v }: { v: TopViolation }) {
-  const color = severityColor(v.severity);
+function ViolationRow({ v, onSelect }: { v: Violation; onSelect: (v: Violation) => void }) {
+  const [hover, setHover] = useState(false);
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 80px', gap: 10, alignItems: 'center',
-      padding: '8px 10px', borderBottom: '1px solid #2a2d32', fontSize: 12,
+      display: 'grid', gridTemplateColumns: VIOLATION_COLUMNS, gap: 10, alignItems: 'center',
+      padding: '7px 10px', borderBottom: '1px solid #2a2d32', fontSize: 12,
     }}>
-      <span style={{
-        color, fontWeight: 700, fontSize: 11, background: `${color}18`,
-        border: `1px solid ${color}44`, borderRadius: 10, padding: '2px 8px', textAlign: 'center',
-      }}>
-        {severityLabel(v.severity)}
+      <Pill label={severityLabel(v.severity)} color={severityColor(v.severity)} />
+      <button
+        onClick={() => onSelect(v)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        title={`${v.policyName} — click for details`}
+        style={{
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left',
+          color: '#f0f0f0', fontSize: 12, textDecoration: hover ? 'underline' : 'none',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {v.policyName}
+      </button>
+      <span
+        title={`${v.namespace}/${v.deploymentName}`}
+        style={{ color: '#e0e0e0', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
+        {v.deploymentName}
       </span>
-      <span style={{ color: '#f0f0f0' }}>{v.policyName}</span>
-      <span style={{ color: '#8a8d90' }}>{v.deploymentName}</span>
-      <span style={{ color: '#8a8d90' }}>{v.cluster}</span>
-      <span style={{ color: '#6a6e73', textAlign: 'right' }}>{fmtAge(v.firstOccurred)}</span>
+      <Pill label={v.cluster} color={clusterColor(v.cluster)} />
+      <span style={{ color: '#8a8d90', textAlign: 'right' }}>{fmtAge(v.lastOccurred)}</span>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: '#8a8d90', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 13, color: '#d2d2d2', lineHeight: 1.6 }}>{children}</div>
+    </div>
+  );
+}
+
+function mitreUrl(id: string): string {
+  return id.startsWith('TA')
+    ? `https://attack.mitre.org/tactics/${id}/`
+    : `https://attack.mitre.org/techniques/${id.replace('.', '/')}/`;
+}
+
+// Drill-down for one violation row: what the policy means (description, rationale,
+// remediation) and what this deployment actually did to trip it. Fetched on open.
+function ViolationModal({ violation, onClose }: { violation: Violation; onClose: () => void }) {
+  const [detail, setDetail] = useState<ViolationDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/backend/compliance/violations/${violation.alertId}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        return res.json();
+      })
+      .then((json: ViolationDetail) => { if (!cancelled) setDetail(json); })
+      .catch((e: any) => { if (!cancelled) setError(e.message ?? 'Failed to load violation details'); });
+    return () => { cancelled = true; };
+  }, [violation.alertId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const mitreIds = detail
+    ? Array.from(new Set(detail.mitre.flatMap(m => [m.tactic, ...m.techniques]).filter(Boolean)))
+    : [];
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.65)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={violation.policyName}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#1b1d21', border: '1px solid #3c3f42', borderRadius: 8,
+          width: 'min(760px, 100%)', maxHeight: '100%', display: 'flex', flexDirection: 'column',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+        }}
+      >
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #2a2d32', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <Pill label={severityLabel(violation.severity)} color={severityColor(violation.severity)} />
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#f0f0f0' }}>{violation.policyName}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#8a8d90' }}>
+              <Pill label={violation.cluster} color={clusterColor(violation.cluster)} />
+              <span>{violation.namespace} /</span>
+              <span style={{ color: '#e0e0e0', fontWeight: 700 }}>{violation.deploymentName}</span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ background: 'none', border: 'none', color: '#8a8d90', fontSize: 20, lineHeight: 1, cursor: 'pointer', padding: 4 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {error ? (
+            <div style={{
+              padding: '8px 12px', borderRadius: 6, fontSize: 12,
+              background: '#c9190b22', border: '1px solid #c9190b66', color: '#e57979',
+            }}>
+              Could not load details from RHACS Central: {error}
+            </div>
+          ) : !detail ? (
+            <div style={{ color: '#6a6e73', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
+                <DetailSection title="Lifecycle">{detail.lifecycleStages.map(fmtEnum).join(', ') || '—'}</DetailSection>
+                <DetailSection title="Categories">{detail.categories.join(', ') || '—'}</DetailSection>
+                <DetailSection title="Enforcement">
+                  {detail.enforcementActions.length ? detail.enforcementActions.map(fmtEnum).join(', ') : 'Inform only'}
+                </DetailSection>
+                <DetailSection title="First seen">{fmtDateTime(detail.firstOccurred)}</DetailSection>
+                <DetailSection title="Last seen">{fmtDateTime(detail.lastOccurred)}</DetailSection>
+              </div>
+
+              {detail.description && <DetailSection title="Description">{detail.description}</DetailSection>}
+              {detail.rationale && <DetailSection title="Why it matters">{detail.rationale}</DetailSection>}
+              {detail.remediation && <DetailSection title="Remediation">{detail.remediation}</DetailSection>}
+
+              <DetailSection
+                title={detail.totalMessages > detail.messages.length
+                  ? `What triggered it (latest ${detail.messages.length} of ${detail.totalMessages})`
+                  : 'What triggered it'}
+              >
+                {detail.messages.length === 0 ? '—' : (
+                  <div style={{ background: '#151515', border: '1px solid #2a2d32', borderRadius: 6, maxHeight: 200, overflowY: 'auto' }}>
+                    {detail.messages.map((m, i) => (
+                      <div key={i} style={{ padding: '6px 10px', borderBottom: '1px solid #2a2d32', fontSize: 12, lineHeight: 1.5 }}>
+                        <div style={{ color: '#d2d2d2', wordBreak: 'break-word' }}>{m.message}</div>
+                        {m.time > 0 && <div style={{ color: '#6a6e73', fontSize: 11 }}>{fmtDateTime(m.time)}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DetailSection>
+
+              {mitreIds.length > 0 && (
+                <DetailSection title="MITRE ATT&CK">
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {mitreIds.map(id => (
+                      <a key={id} href={mitreUrl(id)} target="_blank" rel="noopener noreferrer" style={{ color: CLOUD_COLOR, fontSize: 12 }}>
+                        {id}
+                      </a>
+                    ))}
+                  </div>
+                </DetailSection>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -117,6 +333,10 @@ export default function ComplianceWidget() {
   const [snapshot, setSnapshot] = useState<ComplianceSnapshot | null>(null);
   const [pending, setPending] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [clusterFilter, setClusterFilter] = useState<ClusterFilter>('all');
+  const [severityFilter, setSeverityFilter] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Violation | null>(null);
+  const closeModal = useCallback(() => setSelected(null), []);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async (path: string, method: 'GET' | 'POST') => {
@@ -149,9 +369,15 @@ export default function ComplianceWidget() {
   const findCluster = (cluster: 'onprem' | 'cloud') =>
     snapshot?.clusters.find(c => c.cluster === cluster) ?? { cluster, healthStatus: 'UNKNOWN', sensorHealthStatus: 'UNKNOWN' };
 
+  const violations = snapshot?.violations ?? [];
+  const bySeverity = severityFilter ? violations.filter(v => v.severity === severityFilter) : violations;
+  const shown = clusterFilter === 'all' ? bySeverity : bySeverity.filter(v => v.cluster === clusterFilter);
+  const clusterCount = (c: string) => bySeverity.filter(v => v.cluster === c).length;
+  const toggleSeverity = (sev: string) => setSeverityFilter(cur => (cur === sev ? null : sev));
+
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexShrink: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 16, color: '#f0f0f0' }}>RHACS Compliance</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 11, color: '#6a6e73' }}>
@@ -171,13 +397,13 @@ export default function ComplianceWidget() {
         </div>
       </div>
 
-      <div style={{ fontSize: 13, color: '#8a8d90', marginBottom: 18, lineHeight: 1.7 }}>
-        Live security and risk posture from RHACS Central, scoped to the <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>banking-demo</code> and <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>banking-infra</code> namespaces on both clusters. Auto-refreshes every 30s.
+      <div style={{ fontSize: 12, color: '#8a8d90', marginBottom: 14, flexShrink: 0 }}>
+        Live from RHACS Central, scoped to <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>banking-demo</code> and <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>banking-infra</code> on both clusters. Auto-refreshes every 30s.
       </div>
 
       {(fetchError || (snapshot && !snapshot.available)) && (
         <div style={{
-          padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 14,
+          padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 14, flexShrink: 0,
           background: '#c9190b22', border: '1px solid #c9190b66', color: '#e57979',
         }}>
           {fetchError
@@ -191,52 +417,86 @@ export default function ComplianceWidget() {
           Waiting for data…
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flexShrink: 0 }}>
             <ClusterHealthCard health={findCluster('onprem')} accent={ONPREM_COLOR} />
             <ClusterHealthCard health={findCluster('cloud')} accent={CLOUD_COLOR} />
           </div>
 
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 10 }}>Active policy violations</div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <SeverityBadge label="Critical" count={snapshot.severity.critical} color={CAPACITY_COLOR} />
-              <SeverityBadge label="High" count={snapshot.severity.high} color={ONPREM_COLOR} />
-              <SeverityBadge label="Medium" count={snapshot.severity.medium} color={GEN_COLOR} />
-              <SeverityBadge label="Low" count={snapshot.severity.low} color={HEALTHY_COLOR} />
+          <div style={{ background: '#212427', border: '1px solid #2a2d32', borderRadius: 8, padding: '12px 16px', flexShrink: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 10 }}>
+              Posture <span style={{ fontWeight: 400, color: '#8a8d90' }}>— banking-demo + banking-infra, both clusters</span>
             </div>
-          </div>
-
-          <div style={{ background: '#212427', border: '1px solid #2a2d32', borderRadius: 8, padding: 16 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 12 }}>Fleet posture</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
               <StatTile label="Deployments" value={fmtCount(snapshot.numDeployments)} />
-              <StatTile label="Images scanned" value={fmtCount(snapshot.imagesScanned >= 0 ? snapshot.imagesScanned : snapshot.numImages)} />
+              <StatTile label="Images scanned" value={fmtCount(snapshot.imagesScanned)} />
               <StatTile label="Images w/ Critical CVE" value={fmtCount(snapshot.imagesWithCriticalVulns)} />
-              <StatTile label="Nodes" value={fmtCount(snapshot.numNodes)} />
               <StatTile label="Secrets tracked" value={fmtCount(snapshot.numSecrets)} />
+              <StatTile label="Nodes (cluster-wide)" value={fmtCount(snapshot.numNodes)} />
             </div>
           </div>
 
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 10 }}>Top violations</div>
-            {snapshot.topViolations.length === 0 ? (
-              <div style={{ color: '#6a6e73', fontSize: 12, padding: '12px 0' }}>No active violations for our namespaces.</div>
-            ) : (
-              <div style={{ background: '#212427', border: '1px solid #2a2d32', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 80px', gap: 10,
-                  padding: '8px 10px', fontSize: 10, color: '#6a6e73', textTransform: 'uppercase',
-                  borderBottom: '1px solid #2a2d32',
-                }}>
-                  <span>Severity</span><span>Policy</span><span>Deployment</span><span>Cluster</span><span style={{ textAlign: 'right' }}>Age</span>
-                </div>
-                {snapshot.topViolations.map((v, i) => <ViolationRow key={`${v.policyName}-${v.deploymentName}-${i}`} v={v} />)}
+          <div style={{ flexShrink: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginBottom: 8 }}>
+              Active policy violations <span style={{ fontWeight: 400, color: '#6a6e73', fontSize: 11 }}>— click a severity to filter the list</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {SEVERITIES.map(sev => (
+                <SeverityBadge
+                  key={sev}
+                  label={severityLabel(sev)}
+                  count={snapshot.severity[severityLabel(sev).toLowerCase() as keyof typeof snapshot.severity]}
+                  color={severityColor(sev)}
+                  active={severityFilter === sev}
+                  dimmed={severityFilter !== null && severityFilter !== sev}
+                  onClick={() => toggleSeverity(sev)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginRight: 6 }}>
+                Violations{' '}
+                <span style={{ fontWeight: 400, color: '#8a8d90', fontVariantNumeric: 'tabular-nums' }}>
+                  {shown.length === violations.length ? violations.length : `${shown.length} of ${violations.length}`}
+                </span>
+              </span>
+              <FilterChip label="All" count={bySeverity.length} color="#f0f0f0" active={clusterFilter === 'all'} onClick={() => setClusterFilter('all')} />
+              <FilterChip label="onprem" count={clusterCount('onprem')} color={ONPREM_COLOR} active={clusterFilter === 'onprem'} onClick={() => setClusterFilter('onprem')} />
+              <FilterChip label="cloud" count={clusterCount('cloud')} color={CLOUD_COLOR} active={clusterFilter === 'cloud'} onClick={() => setClusterFilter('cloud')} />
+              {(severityFilter || clusterFilter !== 'all') && (
+                <button
+                  onClick={() => { setSeverityFilter(null); setClusterFilter('all'); }}
+                  style={{ background: 'none', border: 'none', color: CLOUD_COLOR, fontSize: 11, cursor: 'pointer', padding: '3px 4px' }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+            <div style={{ background: '#212427', border: '1px solid #2a2d32', borderRadius: 8, overflow: 'hidden', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{
+                display: 'grid', gridTemplateColumns: VIOLATION_COLUMNS, gap: 10, flexShrink: 0,
+                padding: '8px 10px', fontSize: 10, color: '#8a8d90', textTransform: 'uppercase',
+                borderBottom: '1px solid #2a2d32',
+              }}>
+                <span>Severity</span><span>Policy</span><span>Deployment</span><span>Cluster</span><span style={{ textAlign: 'right' }}>Last seen</span>
               </div>
-            )}
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {shown.length === 0 ? (
+                  <div style={{ color: '#6a6e73', fontSize: 12, padding: '12px 10px' }}>
+                    {violations.length === 0 ? 'No active violations for our namespaces.' : 'No violations match the current filters.'}
+                  </div>
+                ) : (
+                  shown.map(v => <ViolationRow key={v.alertId} v={v} onSelect={setSelected} />)
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
+      {selected && <ViolationModal violation={selected} onClose={closeModal} />}
     </div>
   );
 }

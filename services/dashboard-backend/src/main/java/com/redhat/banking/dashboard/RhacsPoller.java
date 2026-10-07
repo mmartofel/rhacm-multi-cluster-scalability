@@ -26,7 +26,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 // Polls RHACS Central directly for security/risk data scoped to our app namespaces
 // (banking-demo, banking-infra) on both clusters. Central is a single onprem-only
@@ -126,10 +128,9 @@ public class RhacsPoller {
         }
         try {
             ComplianceSnapshot next = new ComplianceSnapshot();
-            next.clusters = fetchClusterHealth();
+            fetchClusters(next);
             fetchAlerts(next);
-            fetchImageVulnSummary(next);
-            fetchSummaryCounts(next);
+            fetchCounts(next);
             next.available = true;
             next.lastUpdated = Instant.now().toEpochMilli();
             snapshot = next;
@@ -147,9 +148,7 @@ public class RhacsPoller {
         ComplianceSnapshot next = new ComplianceSnapshot();
         next.clusters = prev.clusters;
         next.severity = prev.severity;
-        next.topViolations = prev.topViolations;
-        next.numAlerts = prev.numAlerts;
-        next.numImages = prev.numImages;
+        next.violations = prev.violations;
         next.numDeployments = prev.numDeployments;
         next.numNodes = prev.numNodes;
         next.numSecrets = prev.numSecrets;
@@ -161,11 +160,24 @@ public class RhacsPoller {
         snapshot = next;
     }
 
-    private List<ComplianceSnapshot.ClusterSecurityHealth> fetchClusterHealth() throws Exception {
+    // Everything below is scoped to these namespaces (RHACS search DSL: comma = OR
+    // within a field, '+' = AND between fields).
+    private static final String NAMESPACE_QUERY = "Namespace:banking-demo,banking-infra";
+
+    // A violation's evidence list can run to hundreds of repeated runtime events.
+    private static final int MAX_DETAIL_MESSAGES = 20;
+
+    // Policy definitions change rarely and there are only a handful in play, so the
+    // drill-down caches them for the life of the pod instead of refetching per click.
+    private final Map<String, JsonNode> policyCache = new ConcurrentHashMap<>();
+
+    private void fetchClusters(ComplianceSnapshot snap) throws Exception {
         JsonNode root = mapper.readTree(httpGet(centralUrl + "/v1/clusters"));
         JsonNode clusters = root.isArray() ? root : root.path("clusters");
         List<ComplianceSnapshot.ClusterSecurityHealth> result = new ArrayList<>();
-        if (!clusters.isArray()) return result;
+        if (!clusters.isArray()) return;
+        long nodes = 0;
+        boolean nodesKnown = true;
         for (JsonNode c : clusters) {
             String name = c.path("name").asText("unknown");
             JsonNode health = c.path("healthStatus");
@@ -174,8 +186,17 @@ public class RhacsPoller {
             String overall = health.path("overallHealthStatus").asText(c.path("overallHealthStatus").asText("UNKNOWN"));
             String sensor = health.path("sensorHealthStatus").asText(c.path("sensorHealthStatus").asText("UNKNOWN"));
             result.add(new ComplianceSnapshot.ClusterSecurityHealth(name, overall, sensor));
+
+            // There is no node-count endpoint; list each cluster's nodes and count.
+            try {
+                JsonNode list = mapper.readTree(httpGet(centralUrl + "/v1/nodes/" + c.path("id").asText())).path("nodes");
+                if (list.isArray()) nodes += list.size(); else nodesKnown = false;
+            } catch (Exception e) {
+                nodesKnown = false;
+            }
         }
-        return result;
+        snap.clusters = result;
+        snap.numNodes = nodesKnown && !result.isEmpty() ? nodes : -1;
     }
 
     private static final String[] SEVERITY_ORDER = {
@@ -184,14 +205,14 @@ public class RhacsPoller {
 
     private void fetchAlerts(ComplianceSnapshot snap) {
         try {
-            String query = "Namespace:banking-demo,banking-infra+Violation State:ACTIVE";
+            String query = NAMESPACE_QUERY + "+Violation State:ACTIVE";
             String url = centralUrl + "/v1/alerts?query=" + urlEncode(query) + "&pagination.limit=500";
             JsonNode root = mapper.readTree(httpGet(url));
             JsonNode alerts = root.isArray() ? root : root.path("alerts");
             if (!alerts.isArray()) return;
 
             ComplianceSnapshot.SeverityCounts counts = new ComplianceSnapshot.SeverityCounts();
-            List<ComplianceSnapshot.TopViolation> violations = new ArrayList<>();
+            List<ComplianceSnapshot.Violation> violations = new ArrayList<>();
 
             for (JsonNode alert : alerts) {
                 String severity = alert.path("policy").path("severity").asText("UNKNOWN");
@@ -203,69 +224,121 @@ public class RhacsPoller {
                     default -> { /* unrecognized severity string — ignore for counting */ }
                 }
 
-                ComplianceSnapshot.TopViolation v = new ComplianceSnapshot.TopViolation();
+                ComplianceSnapshot.Violation v = new ComplianceSnapshot.Violation();
+                v.alertId = alert.path("id").asText("");
+                v.policyId = alert.path("policy").path("id").asText("");
+                v.namespace = alert.at("/commonEntityInfo/namespace").asText(
+                        alert.at("/deployment/namespace").asText(""));
+                v.lifecycleStage = alert.path("lifecycleStage").asText("");
                 v.policyName = alert.path("policy").path("name").asText("Unknown policy");
                 v.deploymentName = alert.at("/deployment/name").isMissingNode()
                         ? alert.at("/resource/name").asText("unknown")
                         : alert.at("/deployment/name").asText("unknown");
-                v.cluster = alert.path("clusterName").asText(
+                v.cluster = alert.at("/commonEntityInfo/clusterName").asText(
                         alert.at("/deployment/clusterName").asText("unknown"));
                 v.severity = severity;
-                v.firstOccurred = parseTimeMillis(alert.path("time").asText(null));
+                // The list API's "time" is the latest occurrence; firstOccurred only
+                // exists on the single-alert endpoint (see fetchViolationDetail).
+                v.lastOccurred = parseTimeMillis(alert.path("time").asText(null));
                 violations.add(v);
             }
 
             violations.sort(Comparator
-                    .comparingInt((ComplianceSnapshot.TopViolation v) -> severityRank(v.severity))
-                    .thenComparingLong((ComplianceSnapshot.TopViolation v) -> -v.firstOccurred));
+                    .comparingInt((ComplianceSnapshot.Violation v) -> severityRank(v.severity))
+                    .thenComparingLong((ComplianceSnapshot.Violation v) -> -v.lastOccurred));
 
             snap.severity = counts;
-            snap.topViolations = violations.size() > 10 ? violations.subList(0, 10) : violations;
+            snap.violations = violations;
         } catch (Exception e) {
-            // leave severity/topViolations at their zero-value defaults — best-effort,
+            // leave severity/violations at their zero-value defaults — best-effort,
             // same convention as ClusterPoller's per-field try/catch degrade.
         }
     }
 
-    private void fetchImageVulnSummary(ComplianceSnapshot snap) {
-        try {
-            String url = centralUrl + "/v1/images?query=" + urlEncode("Namespace:banking-demo,banking-infra") + "&pagination.limit=200";
-            JsonNode root = mapper.readTree(httpGet(url));
-            JsonNode images = root.isArray() ? root : root.path("images");
-            if (!images.isArray()) return;
+    // RHACS 4.11 has no /v1/summary/counts (404) and its /v1/images list carries no
+    // per-severity vulnerability counter — confirmed live. The per-entity *count
+    // endpoints take the same search query as the list endpoints and return
+    // {"count": N}. Each is fetched independently so one failure only blanks its
+    // own tile.
+    private void fetchCounts(ComplianceSnapshot snap) {
+        snap.numDeployments = fetchCount("/v1/deploymentscount", NAMESPACE_QUERY);
+        snap.numSecrets = fetchCount("/v1/secretscount", NAMESPACE_QUERY);
+        snap.imagesScanned = fetchCount("/v1/imagescount", NAMESPACE_QUERY);
+        snap.imagesWithCriticalVulns = fetchCount("/v1/imagescount",
+                NAMESPACE_QUERY + "+Severity:CRITICAL_VULNERABILITY_SEVERITY");
+    }
 
-            long total = 0;
-            long withCritical = 0;
-            boolean sawVulnCounter = false;
-            for (JsonNode img : images) {
-                total++;
-                JsonNode criticalNode = img.at("/vulnCounter/critical/total");
-                if (!criticalNode.isMissingNode()) {
-                    sawVulnCounter = true;
-                    if (criticalNode.asInt(0) > 0) withCritical++;
-                }
-            }
-            snap.imagesScanned = total;
-            snap.imagesWithCriticalVulns = sawVulnCounter ? withCritical : -1;
+    private long fetchCount(String path, String query) {
+        try {
+            JsonNode root = mapper.readTree(httpGet(centralUrl + path + "?query=" + urlEncode(query)));
+            return root.path("count").asLong(-1);
         } catch (Exception e) {
-            // leave at -1 (unknown) — field shape varies across RHACS versions,
-            // confirm live against the deployed Central before relying on this.
+            return -1; // unknown
         }
     }
 
-    private void fetchSummaryCounts(ComplianceSnapshot snap) {
-        try {
-            JsonNode root = mapper.readTree(httpGet(centralUrl + "/v1/summary/counts"));
-            // Protobuf int64 fields are serialized as JSON strings by Central's
-            // grpc-gateway — asLong() parses numeric strings fine either way.
-            snap.numAlerts = root.path("numAlerts").asLong(-1);
-            snap.numDeployments = root.path("numDeployments").asLong(-1);
-            snap.numNodes = root.path("numNodes").asLong(-1);
-            snap.numImages = root.path("numImages").asLong(-1);
-            snap.numSecrets = root.path("numSecrets").asLong(-1);
-        } catch (Exception e) {
-            // leave at -1 (unknown)
+    // alertId must already be validated by the caller (it goes straight into the URL).
+    ComplianceSnapshot.ViolationDetail fetchViolationDetail(String alertId) throws Exception {
+        if (apiToken.isEmpty() || apiToken.get().isBlank()) {
+            throw new IllegalStateException("RHACS_API_TOKEN not configured");
         }
+        JsonNode alert = mapper.readTree(httpGet(centralUrl + "/v1/alerts/" + alertId));
+        // The alert embeds a policy summary; rationale/remediation/MITRE are only
+        // guaranteed on the policy itself, so prefer that and fall back to the embed.
+        JsonNode policy = alert.path("policy");
+        String policyId = policy.path("id").asText("");
+        if (!policyId.isEmpty()) {
+            try {
+                JsonNode full = policyCache.get(policyId);
+                if (full == null) {
+                    full = mapper.readTree(httpGet(centralUrl + "/v1/policies/" + policyId));
+                    policyCache.put(policyId, full);
+                }
+                policy = full;
+            } catch (Exception e) {
+                // keep the embedded summary
+            }
+        }
+
+        ComplianceSnapshot.ViolationDetail d = new ComplianceSnapshot.ViolationDetail();
+        d.alertId = alertId;
+        d.policyName = policy.path("name").asText("Unknown policy");
+        d.severity = policy.path("severity").asText("UNKNOWN");
+        d.description = policy.path("description").asText("");
+        d.rationale = policy.path("rationale").asText("");
+        d.remediation = policy.path("remediation").asText("");
+        d.categories = textList(policy.path("categories"));
+        d.lifecycleStages = textList(policy.path("lifecycleStages"));
+        d.enforcementActions = textList(policy.path("enforcementActions"));
+        for (JsonNode m : policy.path("mitreAttackVectors")) {
+            ComplianceSnapshot.MitreVector mv = new ComplianceSnapshot.MitreVector();
+            mv.tactic = m.path("tactic").asText("");
+            mv.techniques = textList(m.path("techniques"));
+            d.mitre.add(mv);
+        }
+
+        d.deploymentName = alert.at("/deployment/name").isMissingNode()
+                ? alert.at("/resource/name").asText("unknown")
+                : alert.at("/deployment/name").asText("unknown");
+        d.namespace = alert.path("namespace").asText(alert.at("/deployment/namespace").asText(""));
+        d.cluster = alert.path("clusterName").asText(alert.at("/deployment/clusterName").asText("unknown"));
+        d.firstOccurred = parseTimeMillis(alert.path("firstOccurred").asText(null));
+        d.lastOccurred = parseTimeMillis(alert.path("time").asText(null));
+
+        JsonNode violations = alert.path("violations");
+        d.totalMessages = violations.size();
+        for (JsonNode v : violations) {
+            if (d.messages.size() >= MAX_DETAIL_MESSAGES) break;
+            d.messages.add(new ComplianceSnapshot.ViolationMessage(
+                    v.path("message").asText(""), parseTimeMillis(v.path("time").asText(null))));
+        }
+        return d;
+    }
+
+    private static List<String> textList(JsonNode array) {
+        List<String> out = new ArrayList<>();
+        for (JsonNode n : array) out.add(n.asText());
+        return out;
     }
 
     private static int severityRank(String severity) {

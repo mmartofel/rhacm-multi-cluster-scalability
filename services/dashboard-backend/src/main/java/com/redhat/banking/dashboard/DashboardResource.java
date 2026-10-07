@@ -195,4 +195,24 @@ public class DashboardResource {
         rhacsPoller.poll();
         return Response.ok(rhacsPoller.getSnapshot()).build();
     }
+
+    // Drill-down for one violation row: policy explanation + this alert's evidence,
+    // fetched from Central on demand. alertId is validated as a UUID because it is
+    // interpolated into the Central URL.
+    @GET
+    @Path("/compliance/violations/{alertId}")
+    @Blocking
+    public Response getViolationDetail(@PathParam("alertId") String alertId) {
+        try {
+            java.util.UUID.fromString(alertId);
+        } catch (IllegalArgumentException e) {
+            return Response.status(400).entity(Map.of("error", "invalid alert id")).build();
+        }
+        try {
+            return Response.ok(rhacsPoller.fetchViolationDetail(alertId)).build();
+        } catch (Exception e) {
+            return Response.status(502).entity(Map.of("error",
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName())).build();
+        }
+    }
 }

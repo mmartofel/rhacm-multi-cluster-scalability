@@ -73,12 +73,47 @@ export interface SeverityCounts {
   low: number;
 }
 
-export interface TopViolation {
+export interface Violation {
+  alertId: string;
+  policyId: string;
   policyName: string;
   deploymentName: string;
+  namespace: string;
   cluster: string;
   severity: string;
+  lifecycleStage: string;
+  lastOccurred: number;
+}
+
+export interface ViolationMessage {
+  message: string;
+  time: number;
+}
+
+export interface MitreVector {
+  tactic: string;
+  techniques: string[];
+}
+
+// On-demand drill-down — /api/backend/compliance/violations/{alertId}.
+export interface ViolationDetail {
+  alertId: string;
+  policyName: string;
+  severity: string;
+  description: string;
+  rationale: string;
+  remediation: string;
+  categories: string[];
+  lifecycleStages: string[];
+  enforcementActions: string[];
+  mitre: MitreVector[];
+  deploymentName: string;
+  namespace: string;
+  cluster: string;
   firstOccurred: number;
+  lastOccurred: number;
+  totalMessages: number;
+  messages: ViolationMessage[];
 }
 
 export interface ComplianceSnapshot {
@@ -87,9 +122,7 @@ export interface ComplianceSnapshot {
   lastUpdated: number;
   clusters: ClusterSecurityHealth[];
   severity: SeverityCounts;
-  topViolations: TopViolation[];
-  numAlerts: number;
-  numImages: number;
+  violations: Violation[];
   numDeployments: number;
   numNodes: number;
   numSecrets: number;
