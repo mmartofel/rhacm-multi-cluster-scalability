@@ -156,7 +156,7 @@ function ViolationRow({ v, onSelect }: { v: Violation; onSelect: (v: Violation) 
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: VIOLATION_COLUMNS, gap: 10, alignItems: 'center',
-      padding: '7px 10px', borderBottom: '1px solid #2a2d32', fontSize: 12,
+      padding: '5px 10px', borderBottom: '1px solid #2a2d32', fontSize: 12,
     }}>
       <Pill label={severityLabel(v.severity)} color={severityColor(v.severity)} />
       <button
@@ -376,7 +376,7 @@ export default function ComplianceWidget() {
   const toggleSeverity = (sev: string) => setSeverityFilter(cur => (cur === sev ? null : sev));
 
   return (
-    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: 20, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexShrink: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 16, color: '#f0f0f0' }}>RHACS Compliance</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -455,7 +455,8 @@ export default function ComplianceWidget() {
             </div>
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* minHeight: on a short window the card scrolls rather than squeezing the list to nothing */}
+          <div style={{ flex: 1, minHeight: 220, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap', flexShrink: 0 }}>
               <span style={{ fontWeight: 600, fontSize: 13, color: '#f0f0f0', marginRight: 6 }}>
                 Violations{' '}
