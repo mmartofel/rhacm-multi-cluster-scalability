@@ -1,0 +1,51 @@
+# Namespace-level limits for banking-infra — applied by bootstrap-phase0.sh on both
+# clusters (see banking-demo-limits.yaml for why this is not synced by Argo CD).
+#
+# Kafka, MirrorMaker 2, PostgreSQL, pgBackRest, PgBouncer and Apicurio set their own
+# requests/limits in their CRs/manifests. The LimitRange defaults below cover what
+# cannot be sized there: the Skupper router pod (router, kube-adaptor) and the
+# Network Observer pod (3 containers).
+#
+# Quota = worst case on one cluster (onprem is the larger) + ~20% headroom,
+# measured from the running pods on 2026-10-07:
+#
+#                                          requests (cpu/mem)   limits (cpu/mem)
+#   explicitly sized pods (27 containers)   4590m / 14288Mi     21.4 / 28992Mi
+#   defaulted containers (5)                 250m /   320Mi      5   /  2560Mi
+#   pgBackRest backup job                    100m /   128Mi      1   /   512Mi
+#   +1 surge pod per Deployment (5)          710m /  1808Mi      7.6 /  5056Mi
+#   total                                   5650m / 16544Mi     35   / 37120Mi
+#
+# Storage: 10 PVCs / 165Gi on onprem (Kafka 3x5Gi + 3x20Gi, PostgreSQL 3x20Gi,
+# pgBackRest repo 30Gi); the quota leaves room to grow the PostgreSQL volumes.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: banking-infra-quota
+  namespace: banking-infra
+spec:
+  hard:
+    requests.cpu: "7"
+    requests.memory: 20Gi
+    limits.cpu: "42"
+    limits.memory: 44Gi
+    pods: "28"
+    persistentvolumeclaims: "15"
+    requests.storage: 250Gi
+---
+# Defaults only — no max, so operator-managed pods are never rejected for their
+# size. A default reaches a pod only when it is (re)created.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: banking-infra-limits
+  namespace: banking-infra
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 50m
+      memory: 64Mi
+    default:
+      cpu: "1"
+      memory: 512Mi

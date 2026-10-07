@@ -61,8 +61,10 @@ for ctx in "$ONPREM" "$CLOUD"; do
     check "$ctx: transaction-processor kafka-consumer-channel UP" consumer_channel_up "$ctx" transaction-processor
   fi
   check "$ctx: account-service readiness UP (database reachable)" service_ready "$ctx" account-service
-  check "$ctx: $APP_NS has a ResourceQuota" quota_present "$ctx" "$APP_NS"
-  expect "$ctx: no pod creation refused by the $APP_NS quota" "$(quota_rejections "$ctx" "$APP_NS")" -eq 0
+  for ns in "$APP_NS" "$INFRA_NS"; do
+    check "$ctx: $ns has a ResourceQuota" quota_present "$ctx" "$ns"
+    expect "$ctx: no pod creation refused by the $ns quota" "$(quota_rejections "$ctx" "$ns")" -eq 0
+  done
 done
 
 if (( FAIL > 0 )); then
