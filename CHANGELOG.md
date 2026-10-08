@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-10-08
+
+### Added
+
+- Dashboard: "Resource Consumption" tab after Autoscale Watch (#26). For `banking-demo`
+  and `banking-infra` on each cluster it shows the `ResourceQuota` used vs hard figures
+  as donut gauges (CPU and memory requests and limits, pods; PVCs and storage in
+  `banking-infra`), live CPU and memory use from the metrics API next to what the pods
+  request and are limited to, and a trend of requested vs live usage against the quota.
+- `cluster-gateway`: `GET /api/gateway/resources/summary`, with read-only access to
+  `resourcequotas` and pod metrics in both namespaces.
+- `smoke-test.sh` checks that each cluster's gateway reports both namespace quotas.
+
 ## [1.2.2] - 2026-10-08
 
 ### Fixed
@@ -165,7 +178,8 @@ Phase 0 through Phase 2 bootstrap, the application services, and dashboard UI.
 - Optimistic locking and idempotency pre-checks on balance updates to prevent
   silent double-application of transactions on Kafka redelivery.
 
-[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.1.0...v1.2.0
