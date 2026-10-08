@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-08
+
 ### Fixed
 
 - Kafka Load showed `transactions-dlq` as holding every message ever written: for a topic
@@ -163,7 +165,8 @@ Phase 0 through Phase 2 bootstrap, the application services, and dashboard UI.
 - Optimistic locking and idempotency pre-checks on balance updates to prevent
   silent double-application of transactions on Kafka redelivery.
 
-[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.0.0...v1.1.0
