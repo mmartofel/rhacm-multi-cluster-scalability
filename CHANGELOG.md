@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-08
+
+Zero-DLQ release: under two-cluster load and through an interconnect outage nothing is
+rejected to the DLQ any more. The acceptance test passes all five stages.
+
 ### Fixed
 
 - Transactions rejected to the DLQ under two-cluster load (#25): `transaction-processor`
@@ -26,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `transactions-committed` size cap raised to 512 MB per partition.
 - `smoke-test.sh` and `acceptance-test.sh` require zero DLQ messages; `sent to DLQ` is a
   `log-scan` signature.
+- README and the dashboard's "Simulate Link Failure" text describe the new outage
+  behaviour (and no longer claim MirrorMaker 2 pauses).
 
 ## [1.2.0] - 2026-10-08
 
@@ -150,7 +157,8 @@ Phase 0 through Phase 2 bootstrap, the application services, and dashboard UI.
 - Optimistic locking and idempotency pre-checks on balance updates to prevent
   silent double-application of transactions on Kafka redelivery.
 
-[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/releases/tag/v1.0.0

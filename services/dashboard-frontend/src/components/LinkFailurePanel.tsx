@@ -76,7 +76,7 @@ export default function LinkFailurePanel({ payload }: Props) {
 
       <div style={{ fontSize: 13, color: '#8a8d90', marginBottom: 18, lineHeight: 1.7 }}>
         Deletes (or recreates) the <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>kafka-bootstrap</code>, <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>postgresql-primary</code>, and <code style={{ background: '#2a2d32', padding: '2px 5px', borderRadius: 3 }}>apicurio-registry</code> Skupper Listeners
-        on Cloud — a real RHSI outage for those services. MM2 pauses, Cloud's processor rejects transactions to the DLQ, On-Prem continues unaffected.
+        on Cloud — a real RHSI outage for those services. Cloud's processors wait and retry (its backlog grows and commits after restore, nothing goes to the DLQ), MM2 keeps mirroring over its own tunnel, On-Prem continues unaffected.
       </div>
 
       {message && (
