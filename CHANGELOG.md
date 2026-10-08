@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-08
+
+Data-consistency release: repeated deliveries can no longer change a balance or the ledger
+twice. The acceptance test passes all five stages.
+
 ### Fixed
 
 - Balance updates applied twice for one transaction: `account-service` now writes the
@@ -20,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `acceptance-test.sh` checks one ledger entry per committed transaction; all five
   stages now pass.
+- `transaction-processor` no longer inserts into `transactions`; it sends the transaction
+  details with `apply`, retries a failed `apply` once and re-emits `TransactionCommitted`
+  for a duplicate delivery.
 
 ## [1.1.0] - 2026-10-08
 
@@ -122,6 +130,7 @@ Phase 0 through Phase 2 bootstrap, the application services, and dashboard UI.
 - Optimistic locking and idempotency pre-checks on balance updates to prevent
   silent double-application of transactions on Kafka redelivery.
 
-[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/releases/tag/v1.0.0
