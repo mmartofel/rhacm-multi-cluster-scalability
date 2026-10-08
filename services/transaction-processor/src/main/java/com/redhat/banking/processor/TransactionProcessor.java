@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -128,16 +129,20 @@ public class TransactionProcessor {
 
         TransactionEvent event = message.getPayload();
 
-        // Pre-check: skip if already committed (Kafka redelivery after crash)
-        boolean alreadyProcessed = withDbRetry(() -> QuarkusTransaction.requiringNew().call(() -> {
-            Number count = (Number) em.createNativeQuery(
-                    "SELECT COUNT(*) FROM transactions WHERE transaction_id = ?1")
-                    .setParameter(1, UUID.fromString(event.getTransactionId()))
-                    .getSingleResult();
-            return count.longValue() > 0;
-        }));
-        if (alreadyProcessed) {
-            Log.debugf("Transaction %s already committed (redelivery skip)", event.getTransactionId());
+        // Pre-check: already committed (Kafka redelivery). The earlier delivery may have
+        // stopped between the apply and the emit — a pod scaled down while it waited for
+        // account-service through an outage (seen 2026-10-08: two committed transactions
+        // with no ledger entry) — so emit again; ledger-service ignores a repeated id.
+        List<?> committedBalance = withDbRetry(() -> QuarkusTransaction.requiringNew().call(() ->
+                em.createNativeQuery("SELECT balance_after FROM transactions WHERE transaction_id = ?1")
+                        .setParameter(1, UUID.fromString(event.getTransactionId()))
+                        .getResultList()));
+        if (!committedBalance.isEmpty()) {
+            Log.debugf("Transaction %s already committed (redelivery)", event.getTransactionId());
+            Number balanceAfter = (Number) committedBalance.get(0);
+            if (balanceAfter != null) {
+                emitCommitted(event, balanceAfter.doubleValue());
+            }
             return message.ack();
         }
 
@@ -159,16 +164,19 @@ public class TransactionProcessor {
         if (response.duplicate) {
             Log.debugf("Transaction %s already applied (duplicate delivery)", event.getTransactionId());
         }
-        TransactionCommitted committed = TransactionCommitted.newBuilder()
-                .setTransactionId(event.getTransactionId())
-                .setAccountId(event.getAccountId())
-                .setBalanceAfter(response.newBalance)
-                .setProcessedAt(Instant.now())
-                .setSourceCluster(sourceCluster)
-                .build();
-        committedEmitter.send(committed);
+        emitCommitted(event, response.newBalance);
 
         return message.ack();
+    }
+
+    private void emitCommitted(TransactionEvent event, double balanceAfter) {
+        committedEmitter.send(TransactionCommitted.newBuilder()
+                .setTransactionId(event.getTransactionId())
+                .setAccountId(event.getAccountId())
+                .setBalanceAfter(balanceAfter)
+                .setProcessedAt(Instant.now())
+                .setSourceCluster(sourceCluster)
+                .build());
     }
 
     private void sendToDlq(TransactionEvent event, String reason) {
