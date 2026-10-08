@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Transactions rejected to the DLQ under two-cluster load (#25): `transaction-processor`
+  no longer sends an account version with `apply` (no more `version conflict`), and a
+  failed call to `account-service` is retried with backoff instead of being rejected as
+  `service error`. Only insufficient funds or an unknown account reach the DLQ.
+- A committed transaction could be left without a ledger entry when its first delivery
+  stopped between the apply and the emit: a redelivered, already-committed message now
+  re-emits `TransactionCommitted`.
+
+### Changed
+
+- During an interconnect outage cloud processors wait and commit after restore; cloud
+  `transactions-raw` lag grows instead of the DLQ.
+- `smoke-test.sh` and `acceptance-test.sh` require zero DLQ messages; `sent to DLQ` is a
+  `log-scan` signature.
+
 ## [1.2.0] - 2026-10-08
 
 Data-consistency release: repeated deliveries can no longer change a balance or the ledger
