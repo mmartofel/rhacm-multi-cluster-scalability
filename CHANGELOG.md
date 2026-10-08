@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-08
+
+Hardening release: resource limits, probes, test suite and the fixes found while running
+the platform under load on several cluster pairs (Azure, bare metal + AWS).
+
 ### Added
 
 - `ResourceQuota` and `LimitRange` for `banking-demo` and `banking-infra` on both
@@ -18,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now detects a Kafka consumer that was closed by a fatal channel failure nothing else
   reported, and the pod is restarted (#24).
 - Startup probe for `apicurio-registry` (#23).
+- Test suite: `smoke-test.sh`, `log-scan.sh` and `acceptance-test.sh` (smoke, autoscale,
+  interconnect chaos, data consistency, log gate), with reports in `test-reports/`.
+- Dashboard Compliance pane backed by live RHACS data: posture counts, full violation
+  list with cluster/severity filters, policy drill-down (#8, #22).
 
 ### Changed
 
@@ -26,6 +35,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every readiness and liveness probe has an explicit 3 s timeout (#23).
 - `transaction-generator` liveness no longer depends on Kafka channel health; readiness
   uses a dedicated `kafka-topic` check (#23).
+- `ledger-service` consumes `transactions-committed` in batches (one DB transaction per
+  poll) and `account-service` applies a balance in one statement — both removed a
+  cloud-side consumer lag caused by per-record round trips over the interconnect.
+- PostgreSQL `max_connections` raised to 300; `transaction-processor` DB pool set to 2
+  and the `account-service` HPA capped at 4 replicas to stay inside that budget.
+
+### Fixed
+
+- Kafka consumers of `ledger-service` and `transaction-processor` died 60 s into an
+  interconnect outage while retrying a DB write (`throttled.unprocessed-record-max-age.ms`).
+- `cluster-gateway` OOMKills caused by creating an `HttpClient` per proxied request.
+- `dashboard-backend` crashing at boot when the RHACS API token secret did not exist yet,
+  and failing TLS hostname verification against RHACS Central.
+- `dashboard-frontend` returning 502 for every proxied call on clusters whose DNS service
+  IP is not `172.30.0.10` (resolver now read from the pod's `resolv.conf`).
+- RHACM search running without a PVC (`SearchPVCNotPresentCritical`).
+
+### Known issues
+
+- Balance updates can be applied twice for one transaction (#20) and a ledger batch can
+  be written twice across an interconnect break (#21); the acceptance test's consistency
+  stage fails until these are fixed.
 
 ## [1.0.0] - 2026-09-07
 
@@ -77,5 +108,6 @@ Phase 0 through Phase 2 bootstrap, the application services, and dashboard UI.
 - Optimistic locking and idempotency pre-checks on balance updates to prevent
   silent double-application of transactions on Kafka redelivery.
 
-[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mmartofel/rhacm-multi-cluster-scalability/releases/tag/v1.0.0
