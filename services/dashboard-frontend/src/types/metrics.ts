@@ -34,6 +34,22 @@ export interface TopicLag {
   partitions: PartitionDetail[];
 }
 
+// One ResourceQuota entry: CPU in cores, memory/storage in bytes, counts as-is.
+export interface QuotaItem {
+  resource: string;
+  used: number;
+  hard: number;
+}
+
+// Per namespace: quota used vs hard, plus live usage from the metrics API (-1 = unknown).
+export interface NamespaceResources {
+  namespace: string;
+  quota: string | null;
+  items: QuotaItem[];
+  usageCpuCores: number;
+  usageMemoryBytes: number;
+}
+
 export interface ClusterMetrics {
   cluster: string;
   tps: number;
@@ -49,6 +65,7 @@ export interface ClusterMetrics {
   rejectedTotal: number;
   partitions?: PartitionStat[];
   kafkaTopics?: TopicLag[];
+  resources?: NamespaceResources[];
 }
 
 export interface MetricsPayload {

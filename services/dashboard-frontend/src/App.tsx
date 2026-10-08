@@ -4,7 +4,7 @@ import {
   Masthead, MastheadMain, MastheadBrand, MastheadContent,
   Grid, GridItem,
 } from '@patternfly/react-core';
-import { MetricsPayload, ONPREM_CAPACITY_TPS } from './types/metrics';
+import { MetricsPayload, NamespaceResources, ONPREM_CAPACITY_TPS } from './types/metrics';
 import AppHeader from './components/AppHeader';
 import AppNav from './components/AppNav';
 import AppFooter from './components/AppFooter';
@@ -18,6 +18,7 @@ import LinkFailurePanel from './components/LinkFailurePanel';
 import ComplianceWidget from './components/ComplianceWidget';
 import AutoscaleWatchPanel from './components/AutoscaleWatchPanel';
 import KafkaLoadPanel from './components/KafkaLoadPanel';
+import ResourceConsumptionPanel from './components/ResourceConsumptionPanel';
 
 const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/metrics`;
 const MAX_HISTORY = 360;
@@ -25,7 +26,8 @@ const MAX_HISTORY = 360;
 export type TpmPoint = { ts: number; onprem: number; cloud: number };
 export type ThroughputPoint = { ts: number; genRate: number; onpremCommit: number; cloudCommit: number; estimated: boolean };
 export type AutoscalePoint = { ts: number; onpremProcessor: number; cloudProcessor: number; onpremAccount: number; cloudAccount: number };
-export type View = 'overview' | 'load-control' | 'chaos' | 'kafka-load' | 'compliance' | 'autoscale' | 'about';
+export type ResourcePoint = { ts: number; onprem: NamespaceResources[]; cloud: NamespaceResources[] };
+export type View = 'overview' | 'load-control' | 'chaos' | 'kafka-load' | 'compliance' | 'autoscale' | 'resources' | 'about';
 export type ProcessingMode = 'auto-burst' | 'onprem-only' | 'split' | 'cloud-only';
 
 export default function App() {
@@ -43,6 +45,7 @@ export default function App() {
   const tpmHistory = useRef<TpmPoint[]>([]);
   const throughputHistory = useRef<ThroughputPoint[]>([]);
   const autoscaleHistory = useRef<AutoscalePoint[]>([]);
+  const resourceHistory = useRef<ResourcePoint[]>([]);
 
   useEffect(() => {
     let ws: WebSocket;
@@ -82,6 +85,11 @@ export default function App() {
               cloudProcessor:  cloud.processorReplicas  ?? -1,
               onpremAccount:   onprem.accountReplicas   ?? -1,
               cloudAccount:    cloud.accountReplicas    ?? -1,
+            }].slice(-MAX_HISTORY);
+            resourceHistory.current = [...resourceHistory.current, {
+              ts,
+              onprem: onprem.resources ?? [],
+              cloud:  cloud.resources  ?? [],
             }].slice(-MAX_HISTORY);
           }
           setPayload(data);
@@ -151,6 +159,8 @@ export default function App() {
         return <ComplianceWidget />;
       case 'autoscale':
         return <AutoscaleWatchPanel history={autoscaleHistory.current} payload={payload} />;
+      case 'resources':
+        return <ResourceConsumptionPanel history={resourceHistory.current} payload={payload} />;
       case 'about':
         return <Placeholder title="Banking Demo — Multi-Cluster Scalability" body={'On-Prem  ·  Cloud  ·  Red Hat Service Interconnect mTLS\n\nKafka 4.2 (KRaft)  ·  PostgreSQL HA  ·  KEDA autoscaling  ·  Argo CD GitOps  ·  RHACM 2.16\n\nTransactions generated on On-Prem → replicated to Cloud via MirrorMaker 2\nProcessors on both clusters write commits back to On-Prem PostgreSQL via RHSI\nKEDA scales cloud processors 1 → 20 replicas based on consumer lag'} />;
       default:

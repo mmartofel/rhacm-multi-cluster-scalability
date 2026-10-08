@@ -222,6 +222,15 @@ quota_rejections() {
     | grep -c 'exceeded quota' || true
 }
 
+# quota_reported <ctx> — cluster-gateway serves used/hard for both namespace quotas
+# (Resource Consumption tab). Live usage is not asserted: it is legitimately -1
+# while metrics-server rolls.
+quota_reported() {
+  gw "$1" GET /api/gateway/resources/summary | jq -e --arg a "$APP_NS" --arg b "$INFRA_NS" '
+    ([.[].namespace] | index($a) != null and index($b) != null)
+    and all(.[]; (.items | length) > 0 and all(.items[]; .hard > 0))' >/dev/null 2>&1
+}
+
 # service_ready <ctx> <deployment> — the service's own readiness (includes its database check)
 service_ready() { svc_health "$1" "$2" /health/ready | jq -e '.status=="UP"' >/dev/null 2>&1; }
 

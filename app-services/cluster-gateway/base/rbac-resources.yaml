@@ -1,0 +1,56 @@
+# Read access for the dashboard's "Resource Consumption" tab (ResourceUsageResource.java):
+# the ResourceQuota's used/hard figures and live pod CPU/memory from the metrics API, in
+# both namespaces that carry a quota (infra/namespaces/*-limits.yaml). Read-only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-gateway-resource-reader
+  namespace: banking-demo
+rules:
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-gateway-resource-reader
+  namespace: banking-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-gateway-resource-reader
+subjects:
+- kind: ServiceAccount
+  name: cluster-gateway
+  namespace: banking-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cluster-gateway-resource-reader
+  namespace: banking-infra
+rules:
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-gateway-resource-reader
+  namespace: banking-infra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cluster-gateway-resource-reader
+subjects:
+- kind: ServiceAccount
+  name: cluster-gateway
+  namespace: banking-demo

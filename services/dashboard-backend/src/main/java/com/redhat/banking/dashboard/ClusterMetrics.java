@@ -43,6 +43,21 @@ public class ClusterMetrics {
         public List<PartitionDetail> partitions;
     }
 
+    // Mirrors cluster-gateway's ResourceUsageResource (GET /api/gateway/resources/summary).
+    public static class QuotaItem {
+        public String resource;
+        public double used;   // CPU in cores, memory/storage in bytes, counts as-is
+        public double hard;
+    }
+
+    public static class NamespaceResources {
+        public String namespace;
+        public String quota;
+        public List<QuotaItem> items = new ArrayList<>();
+        public double usageCpuCores = -1;      // -1 = metrics API gave no answer
+        public double usageMemoryBytes = -1;
+    }
+
     public String cluster;
     public double tps;
     public int trafficWeight;
@@ -57,4 +72,5 @@ public class ClusterMetrics {
     public long   rejectedTotal     = 0;    // cumulative rejected transactions since processor start
     public List<PartitionStat> partitions = new ArrayList<>();
     public List<TopicLag> kafkaTopics = new ArrayList<>();
+    public List<NamespaceResources> resources = new ArrayList<>();
 }

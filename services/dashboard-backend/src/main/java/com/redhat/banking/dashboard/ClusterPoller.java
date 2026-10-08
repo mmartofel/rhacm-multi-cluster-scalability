@@ -71,6 +71,29 @@ public class ClusterPoller {
         }
     }
 
+    // Quota and live-usage figures for the "Resource Consumption" tab. The gateways refresh
+    // them every 5 s, so they are fetched here on their own 5 s schedule and only attached
+    // in pollCluster — the serial 1 s poll loop gains no extra network call. A failed fetch
+    // keeps the last known value.
+    private final Map<String, List<ClusterMetrics.NamespaceResources>> resourcesCache = new ConcurrentHashMap<>();
+
+    @Scheduled(every = "5s")
+    void pollResources() {
+        fetchResources("onprem", onpremGatewayUrl);
+        fetchResources("cloud", cloudGatewayUrl);
+    }
+
+    private void fetchResources(String name, String gatewayUrl) {
+        try {
+            String json = httpGet(gatewayUrl + "/api/gateway/resources/summary", Duration.ofMillis(700));
+            List<ClusterMetrics.NamespaceResources> res =
+                    mapper.readValue(json, new TypeReference<List<ClusterMetrics.NamespaceResources>>() {});
+            resourcesCache.put(name, res);
+        } catch (Exception e) {
+            // keep the previous value
+        }
+    }
+
     private ClusterMetrics pollCluster(String name, String gatewayUrl, String ledgerUrl, double intervalSecs) {
         ClusterMetrics m = new ClusterMetrics();
         m.cluster = name;
@@ -143,6 +166,8 @@ public class ClusterPoller {
         } catch (Exception e) {
             // leave empty — best-effort, same as partitions above
         }
+
+        m.resources = resourcesCache.getOrDefault(name, List.of());
 
         return m;
     }

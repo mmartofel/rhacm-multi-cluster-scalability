@@ -160,6 +160,9 @@ else
     check "WebSocket payload reports $ctx healthy" \
       env LC_ALL=C grep -qaE "\"cluster\":\"$ctx\"[^}]*\"healthy\":true" <<<"$WS"
   done
+  for ctx in "$ONPREM" "$CLOUD"; do
+    check "$ctx gateway reports both namespace quotas (Resource Consumption tab)" quota_reported "$ctx"
+  done
   check "cloud gateway reachable from dashboard-backend (RHSI control channel)" backend_reaches_cloud_gateway
 fi
 
