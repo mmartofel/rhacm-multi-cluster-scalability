@@ -9,9 +9,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 
+import org.hibernate.Session;
+
 import java.math.BigDecimal;
+import java.sql.PreparedStatement;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 @ApplicationScoped
@@ -35,6 +40,10 @@ public class LedgerUpdater {
     private static final Duration MAX_BACKOFF = Duration.ofSeconds(15);
     private static final Duration RETRY_BUDGET = Duration.ofMinutes(4);
 
+    private static final String INSERT_SQL =
+            "INSERT INTO ledger_entries (transaction_id, account_id, running_balance, as_of, source_cluster) "
+            + "VALUES (?, ?, ?, ?, ?) ON CONFLICT (transaction_id) DO NOTHING";
+
     @Inject
     KafkaConsumerHealthState healthState;
 
@@ -52,15 +61,23 @@ public class LedgerUpdater {
         if (events.isEmpty()) {
             return;
         }
+        // One JDBC batch of ON CONFLICT DO NOTHING inserts keyed on the transaction id
+        // (issue #21): a batch that PostgreSQL committed but whose reply was lost when the
+        // interconnect dropped used to be inserted a second time by the retry below.
         Uni.createFrom().item(() -> QuarkusTransaction.requiringNew().call(() -> {
-            for (TransactionCommitted event : events) {
-                LedgerEntry entry = new LedgerEntry();
-                entry.accountId = event.getAccountId();
-                entry.runningBalance = BigDecimal.valueOf(event.getBalanceAfter());
-                entry.asOf = event.getProcessedAt();
-                entry.sourceCluster = event.getSourceCluster();
-                entry.persist();
-            }
+            LedgerEntry.getEntityManager().unwrap(Session.class).doWork(conn -> {
+                try (PreparedStatement ps = conn.prepareStatement(INSERT_SQL)) {
+                    for (TransactionCommitted event : events) {
+                        ps.setObject(1, UUID.fromString(event.getTransactionId()));
+                        ps.setString(2, event.getAccountId());
+                        ps.setBigDecimal(3, BigDecimal.valueOf(event.getBalanceAfter()));
+                        ps.setTimestamp(4, Timestamp.from(event.getProcessedAt()));
+                        ps.setString(5, event.getSourceCluster());
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+            });
             return null;
         }))
                 .onFailure().retry().withBackOff(INITIAL_BACKOFF, MAX_BACKOFF).expireIn(RETRY_BUDGET.toMillis())

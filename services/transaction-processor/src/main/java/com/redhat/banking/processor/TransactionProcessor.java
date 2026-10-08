@@ -19,7 +19,6 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -51,6 +50,8 @@ public class TransactionProcessor {
     // RetryingAvroDeserializationFailureHandler lets a transient blip self-heal (via the
     // same JDBC socketTimeout/connectTimeout fix) instead of killing the consumer on the
     // very first attempt.
+    // (Since issues #20/#21 the commit INSERT is done by account-service inside its
+    // idempotent apply; only the pre-check below still runs here.)
     private static final Duration INITIAL_BACKOFF = Duration.ofSeconds(1);
     private static final Duration MAX_BACKOFF = Duration.ofSeconds(15);
     private static final Duration RETRY_BUDGET = Duration.ofMinutes(4);
@@ -134,7 +135,7 @@ public class TransactionProcessor {
                 ? -event.getAmount()
                 : event.getAmount();
 
-        ApplyResponse response = applyWithVersion(event.getAccountId(), delta);
+        ApplyResponse response = applyWithVersion(event, delta);
         if (response == null) {
             sendToDlq(event, "service error");
             return message.ack();
@@ -143,7 +144,7 @@ public class TransactionProcessor {
         if (!response.success) {
             if ("version conflict".equals(response.reason)) {
                 accountVersionCache.put(event.getAccountId(), response.version);
-                response = applyWithVersion(event.getAccountId(), delta);
+                response = applyWithVersion(event, delta);
                 if (response == null || !response.success) {
                     sendToDlq(event, "version conflict");
                     Log.warnf("Transaction %s sent to DLQ after version conflict retry", event.getTransactionId());
@@ -158,36 +159,21 @@ public class TransactionProcessor {
 
         accountVersionCache.put(event.getAccountId(), response.version);
 
-        final ApplyResponse finalResponse = response;
-        boolean shouldEmit = withDbRetry(() -> QuarkusTransaction.requiringNew().call(() -> {
-            int inserted = em.createNativeQuery(
-                    "INSERT INTO transactions (transaction_id, account_id, type, amount, balance_after, processed_at, source_cluster) " +
-                    "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (transaction_id) DO NOTHING")
-                    .setParameter(1, UUID.fromString(event.getTransactionId()))
-                    .setParameter(2, event.getAccountId())
-                    .setParameter(3, event.getType().name())
-                    .setParameter(4, BigDecimal.valueOf(event.getAmount()))
-                    .setParameter(5, BigDecimal.valueOf(finalResponse.newBalance))
-                    .setParameter(6, event.getTimestamp())
-                    .setParameter(7, sourceCluster)
-                    .executeUpdate();
-
-            if (inserted == 0) {
-                Log.debugf("Transaction %s already committed (idempotent skip)", event.getTransactionId());
-            }
-            return inserted > 0;
-        }));
-
-        if (shouldEmit) {
-            TransactionCommitted committed = TransactionCommitted.newBuilder()
-                    .setTransactionId(event.getTransactionId())
-                    .setAccountId(event.getAccountId())
-                    .setBalanceAfter(response.newBalance)
-                    .setProcessedAt(Instant.now())
-                    .setSourceCluster(sourceCluster)
-                    .build();
-            committedEmitter.send(committed);
+        // account-service wrote the transactions row together with the balance update
+        // (idempotent on the transaction id). A duplicate means an earlier delivery already
+        // applied it but may have died before emitting — emit again; ledger-service
+        // ignores a repeated transaction id.
+        if (response.duplicate) {
+            Log.debugf("Transaction %s already applied (duplicate delivery)", event.getTransactionId());
         }
+        TransactionCommitted committed = TransactionCommitted.newBuilder()
+                .setTransactionId(event.getTransactionId())
+                .setAccountId(event.getAccountId())
+                .setBalanceAfter(response.newBalance)
+                .setProcessedAt(Instant.now())
+                .setSourceCluster(sourceCluster)
+                .build();
+        committedEmitter.send(committed);
 
         return message.ack();
     }
@@ -231,18 +217,26 @@ public class TransactionProcessor {
         return cur.getClass().getSimpleName() + ": " + cur.getMessage();
     }
 
-    private ApplyResponse applyWithVersion(String accountId, double delta) {
-        Long cachedVersion = accountVersionCache.get(accountId);
-        Map<String, Number> body = new HashMap<>();
-        body.put("delta", delta);
-        if (cachedVersion != null) {
-            body.put("version", cachedVersion);
-        }
+    private ApplyResponse applyWithVersion(TransactionEvent event, double delta) {
+        ApplyRequest body = new ApplyRequest();
+        body.delta = delta;
+        body.version = accountVersionCache.get(event.getAccountId());
+        body.transactionId = event.getTransactionId();
+        body.type = event.getType().name();
+        body.amount = event.getAmount();
+        body.processedAt = event.getTimestamp().toEpochMilli();
+        body.sourceCluster = sourceCluster;
         try {
-            return accountClient.applyDelta(accountId, body);
-        } catch (Exception e) {
-            Log.errorf("Failed to apply balance for account %s: %s", accountId, e.getMessage());
-            return null;
+            return accountClient.applyDelta(event.getAccountId(), body);
+        } catch (Exception first) {
+            // The apply is idempotent on the transaction id, so repeating it is safe —
+            // and necessary: a call that timed out here may still have been applied.
+            try {
+                return accountClient.applyDelta(event.getAccountId(), body);
+            } catch (Exception e) {
+                Log.errorf("Failed to apply balance for account %s: %s", event.getAccountId(), e.getMessage());
+                return null;
+            }
         }
     }
 }

@@ -243,8 +243,11 @@ stage_consistency() {
     set -- $now;  tx=$(( $1 - tx0 )); led=$(( $2 - led0 )); raw=$(( $3 - raw0 )); dlq=$(( $4 - dlq0 )); cons=$(( $5 - cons0 ))
     info "$ctx over the run: produced=$raw committed=$tx rejected(DLQ)=$dlq ledger=$led ledger-consumed=$cons"
     assert_accounting "$ctx" "$raw" "$tx" "$dlq"
-    (( led == tx ))   || finding "$ctx: ledger entries written ($led) differ from committed transactions ($tx)"
-    (( led == cons )) || finding "$ctx: ledger entries written ($led) differ from messages the ledger consumer read ($cons)"
+    # One ledger row per committed transaction: ledger_entries.transaction_id is unique and
+    # the processor re-emits the event for a duplicate delivery, so neither a repeat nor a
+    # lost emit may leave the two apart.
+    expect "$ctx: one ledger entry per committed transaction ($tx)" "$led" -eq "$tx"
+    (( cons <= led )) || info "$ctx: $(( cons - led )) repeated TransactionCommitted event(s) were consumed and ignored (unique transaction id)"
   done
 }
 

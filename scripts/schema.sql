@@ -26,8 +26,11 @@ CREATE TABLE transactions (
   source_cluster  VARCHAR(10)    NOT NULL
 );
 
+-- transaction_id is UNIQUE so a redelivered or retried TransactionCommitted event
+-- cannot produce a second ledger row (ledger-service inserts ON CONFLICT DO NOTHING).
 CREATE TABLE ledger_entries (
   id              BIGSERIAL      PRIMARY KEY,
+  transaction_id  UUID           NOT NULL UNIQUE,
   account_id      VARCHAR(20)    NOT NULL,
   running_balance NUMERIC(15,2)  NOT NULL,
   as_of           TIMESTAMPTZ    DEFAULT now(),
