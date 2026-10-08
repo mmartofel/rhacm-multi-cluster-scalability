@@ -246,7 +246,7 @@ stage_consistency() {
     # One ledger row per committed transaction: ledger_entries.transaction_id is unique and
     # the processor re-emits the event for a duplicate delivery, so neither a repeat nor a
     # lost emit may leave the two apart.
-    expect "$ctx: one ledger entry per committed transaction ($tx)" "$led" -eq "$tx"
+    expect "$ctx: one ledger entry per committed transaction ($tx committed)" "$led" -eq "$tx"
     (( cons <= led )) || info "$ctx: $(( cons - led )) repeated TransactionCommitted event(s) were consumed and ignored (unique transaction id)"
   done
 }
