@@ -173,7 +173,8 @@ stage_chaos() {
   check "onprem account-service stayed ready throughout" service_ready "$ONPREM" account-service
   grown=$(( $(count_ledger "$ONPREM") - led0 ))
   expect "onprem kept committing during the outage (new ledger entries)" "$grown" -gt 0
-  info "cloud DLQ grew by $(( $(topic_end_sum "$CLOUD" "$DLQ_TOPIC" 0 2) - dlq0 )) message(s) during the outage"
+  # cloud processors wait for account-service/PostgreSQL instead of rejecting (issue #25)
+  expect "cloud sent nothing to the DLQ during the outage" "$(( $(topic_end_sum "$CLOUD" "$DLQ_TOPIC" 0 2) - dlq0 ))" -eq 0
   check "MirrorMaker 2 unaffected (own tunnel)" bash -c \
     "oc --context $CLOUD get kafkamirrormaker2 banking-mirror -n $INFRA_NS -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' | grep -q '^True$'"
 
@@ -243,6 +244,7 @@ stage_consistency() {
     set -- $now;  tx=$(( $1 - tx0 )); led=$(( $2 - led0 )); raw=$(( $3 - raw0 )); dlq=$(( $4 - dlq0 )); cons=$(( $5 - cons0 ))
     info "$ctx over the run: produced=$raw committed=$tx rejected(DLQ)=$dlq ledger=$led ledger-consumed=$cons"
     assert_accounting "$ctx" "$raw" "$tx" "$dlq"
+    expect "$ctx: nothing was rejected to the DLQ over the run" "$dlq" -eq 0
     # One ledger row per committed transaction: ledger_entries.transaction_id is unique and
     # the processor re-emits the event for a duplicate delivery, so neither a repeat nor a
     # lost emit may leave the two apart.

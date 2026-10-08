@@ -18,3 +18,4 @@ kafka-consumer-channel.*DOWN ## Consumer retry budget exhausted — pod will be 
 SRMSG18228 ## A Kafka channel reported a failure — with the default fail strategy the consumer stops for good while the pod stays Ready
 SRMSG18231 ## A record waited longer than throttled.unprocessed-record-max-age.ms (60s) for its ack — the consumer is torn down (seen 2026-10-06: ledger-service retrying its DB write through an interconnect outage)
 Kafka consumer polling thread unresponsive ## KafkaConsumerPollMonitor: the consumer was closed by a fatal channel failure (or its polling thread hung) for longer than kafka.consumer.liveness.stale-after — liveness goes DOWN and the pod is restarted (issue #24)
+sent to DLQ ## transaction-processor rejected a transaction — since issue #25 only insufficient funds or an unknown account can cause this, and the generated load produces neither

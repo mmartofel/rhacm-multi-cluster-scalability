@@ -40,8 +40,8 @@ import java.util.Map;
 // onprem's dashboard-backend can still reach cloud's /api/gateway/health throughout —
 // while still producing the full documented chaos effect: cloud transaction-processor's
 // DB/Apicurio health checks go DOWN with real "connection attempt failed" errors, and
-// transactions get rejected to the DLQ (confirmed live: rejectedTotal climbed during the
-// test). MM2 now runs over its own dedicated tunnel (kafka-bootstrap-mm2:9094, see
+// cloud stops committing (since issue #25 its processors wait and retry instead of
+// rejecting to the DLQ, so the backlog commits after restore). MM2 now runs over its own dedicated tunnel (kafka-bootstrap-mm2:9094, see
 // infra/skupper/{onprem/connectors,cloud/listeners}.yaml and CLAUDE.md's "MirrorMaker 2
 // needs its own dedicated listener/tunnel" note) that this list intentionally does NOT
 // touch, so unlike before, MM2 keeps mirroring transactions-raw uninterrupted through

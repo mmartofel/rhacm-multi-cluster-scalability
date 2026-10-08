@@ -14,8 +14,6 @@ acquisition timeout
 HTTP Request to /api/accounts/[A-Z0-9]+/apply failed
 # a processor's transaction-id pre-check cannot get a pooled connection either (retried by withDbRetry)
 Acquisition timeout while waiting for new connection
-# processors calling account-service while it is not ready / is failing its own DB calls
-Failed to apply balance for account [A-Z0-9]+: .*(Connection refused|timeout period of [0-9]+ms)
 # Apicurio is behind the removed apicurio-registry listener
 ERCache.*UnknownHostException: apicurio-registry
 # a processor pod that KEDA starts during the outage cannot read JDBC metadata at boot

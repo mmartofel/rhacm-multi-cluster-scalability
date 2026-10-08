@@ -117,12 +117,9 @@ for ctx in "$ONPREM" "$CLOUD"; do
   expect "$ctx: transactions committed to PostgreSQL" "$committed" -gt 0
   expect "$ctx: ledger entries written" "$ledgered" -gt 0
   assert_accounting "$ctx" "$produced" "$committed" "$rejected"
-  # version conflicts are expected when both clusters update the same accounts (CLAUDE.md)
-  if (( rejected * 100 <= produced * 5 )); then
-    pass_check "$ctx: rejected share is at most 5% of produced ($rejected of $produced)"
-  else
-    fail_check "$ctx: rejected share above 5% of produced ($rejected of $produced)"
-  fi
+  # Since issue #25 only a real business rejection (insufficient funds, unknown account)
+  # reaches the DLQ, and the generated load produces none.
+  expect "$ctx: nothing was rejected to the DLQ" "$rejected" -eq 0
   if (( ledgered != committed )); then
     finding "$ctx: ledger entries ($ledgered) differ from committed transactions ($committed)"
   fi

@@ -12,6 +12,7 @@ import io.smallrye.reactive.messaging.kafka.api.IncomingKafkaRecordMetadata;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.ws.rs.WebApplicationException;
 import org.eclipse.microprofile.reactive.messaging.Acknowledgment;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
@@ -28,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -52,6 +54,16 @@ public class TransactionProcessor {
     // very first attempt.
     // (Since issues #20/#21 the commit INSERT is done by account-service inside its
     // idempotent apply; only the pre-check below still runs here.)
+    //
+    // Since issue #25 the call to account-service goes through the same wrapper: a failed
+    // apply is retried until it gets an answer instead of being sent to the DLQ as
+    // "service error" (safe, the apply is idempotent on the transaction id). The DLQ now
+    // receives only what account-service itself rejects — insufficient funds, unknown
+    // account. The processor also no longer sends an account version: every account is
+    // written by one processor on each cluster, so the cached version was stale about
+    // every second apply and the "version conflict" answer it produced was 94% of the
+    // DLQ, while the check added nothing — the balance UPDATE is a relative delta, atomic,
+    // guarded against going negative and idempotent.
     private static final Duration INITIAL_BACKOFF = Duration.ofSeconds(1);
     private static final Duration MAX_BACKOFF = Duration.ofSeconds(15);
     private static final Duration RETRY_BUDGET = Duration.ofMinutes(4);
@@ -78,8 +90,6 @@ public class TransactionProcessor {
 
     private final AtomicReference<Set<Integer>> ownedPartitions = new AtomicReference<>(
             parseOwnedPartitions(System.getenv().getOrDefault("OWNED_PARTITIONS", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23")));
-
-    private final ConcurrentHashMap<String, Long> accountVersionCache = new ConcurrentHashMap<>();
 
     // Rejected transaction counters — reset only on pod restart
     private final AtomicLong rejectedCount = new AtomicLong(0);
@@ -135,29 +145,12 @@ public class TransactionProcessor {
                 ? -event.getAmount()
                 : event.getAmount();
 
-        ApplyResponse response = applyWithVersion(event, delta);
-        if (response == null) {
-            sendToDlq(event, "service error");
+        ApplyResponse response = apply(event, delta);
+        if (!response.success) {
+            sendToDlq(event, response.reason);
+            Log.warnf("Transaction %s sent to DLQ: %s", event.getTransactionId(), response.reason);
             return message.ack();
         }
-
-        if (!response.success) {
-            if ("version conflict".equals(response.reason)) {
-                accountVersionCache.put(event.getAccountId(), response.version);
-                response = applyWithVersion(event, delta);
-                if (response == null || !response.success) {
-                    sendToDlq(event, "version conflict");
-                    Log.warnf("Transaction %s sent to DLQ after version conflict retry", event.getTransactionId());
-                    return message.ack();
-                }
-            } else {
-                sendToDlq(event, response.reason);
-                Log.warnf("Transaction %s sent to DLQ: %s", event.getTransactionId(), response.reason);
-                return message.ack();
-            }
-        }
-
-        accountVersionCache.put(event.getAccountId(), response.version);
 
         // account-service wrote the transactions row together with the balance update
         // (idempotent on the transaction id). A duplicate means an earlier delivery already
@@ -201,7 +194,7 @@ public class TransactionProcessor {
         return Uni.createFrom().item(dbCall)
                 .onFailure().retry().withBackOff(INITIAL_BACKOFF, MAX_BACKOFF).expireIn(RETRY_BUDGET.toMillis())
                 .onFailure().invoke(failure -> {
-                    Log.errorf(failure, "Giving up on a transactions-in DB call after retrying for %ds — marking "
+                    Log.errorf(failure, "Giving up on a transactions-in DB/account-service call after retrying for %ds — marking "
                             + "the Kafka consumer channel unhealthy so the pod restarts and redelivers this "
                             + "(never-acked) record", RETRY_BUDGET.getSeconds());
                     healthState.markChannelFailed("transactions-in", rootCause(failure));
@@ -217,26 +210,41 @@ public class TransactionProcessor {
         return cur.getClass().getSimpleName() + ": " + cur.getMessage();
     }
 
-    private ApplyResponse applyWithVersion(TransactionEvent event, double delta) {
+    private ApplyResponse apply(TransactionEvent event, double delta) {
         ApplyRequest body = new ApplyRequest();
         body.delta = delta;
-        body.version = accountVersionCache.get(event.getAccountId());
         body.transactionId = event.getTransactionId();
         body.type = event.getType().name();
         body.amount = event.getAmount();
         body.processedAt = event.getTimestamp().toEpochMilli();
         body.sourceCluster = sourceCluster;
-        try {
-            return accountClient.applyDelta(event.getAccountId(), body);
-        } catch (Exception first) {
-            // The apply is idempotent on the transaction id, so repeating it is safe —
-            // and necessary: a call that timed out here may still have been applied.
+        AtomicBoolean warned = new AtomicBoolean();
+        return withDbRetry(() -> {
             try {
                 return accountClient.applyDelta(event.getAccountId(), body);
-            } catch (Exception e) {
-                Log.errorf("Failed to apply balance for account %s: %s", event.getAccountId(), e.getMessage());
-                return null;
+            } catch (WebApplicationException e) {
+                int status = e.getResponse() == null ? 500 : e.getResponse().getStatus();
+                if (status >= 400 && status < 500) {
+                    // account-service understood the request and refused it — repeating
+                    // it cannot change the answer.
+                    ApplyResponse rejected = new ApplyResponse();
+                    rejected.accountId = event.getAccountId();
+                    rejected.reason = status == 404 ? "account not found" : "rejected by account-service (HTTP " + status + ")";
+                    return rejected;
+                }
+                warnOnce(warned, event, e);
+                throw e;
+            } catch (RuntimeException e) {
+                warnOnce(warned, event, e);
+                throw e;
             }
+        });
+    }
+
+    private static void warnOnce(AtomicBoolean warned, TransactionEvent event, Exception e) {
+        if (warned.compareAndSet(false, true)) {
+            Log.warnf("Apply for account %s (transaction %s) failed, retrying until account-service answers: %s",
+                    event.getAccountId(), event.getTransactionId(), e.getMessage());
         }
     }
 }
