@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Balance updates applied twice for one transaction: `account-service` now writes the
+  `transactions` row in the same statement as the balance update, idempotent on the
+  transaction id (#20).
+- Ledger batch written twice across an interconnect break: `ledger_entries` has a unique
+  `transaction_id` and inserts use `ON CONFLICT DO NOTHING` (#21). **Requires the
+  `scripts/schema.sql` reset.**
+
+### Changed
+
+- `acceptance-test.sh` checks one ledger entry per committed transaction; all five
+  stages now pass.
+
 ## [1.1.0] - 2026-10-08
 
 Hardening release: resource limits, probes, test suite and the fixes found while running

@@ -146,7 +146,7 @@ Exit codes are the same for all three: `0` every check passed, `1` at least one 
 
 `acceptance-test.sh` generates load and makes onprem unreachable from cloud for a few minutes — use it on demo/sandbox environments only. A new harmless `ERROR` message will fail `log-scan.sh` until it is added to the allowlist with a reason; that is intentional.
 
-> **Known failure:** the acceptance test's `consistency` stage currently fails, and is expected to until two open defects are fixed — balance updates applied twice for one transaction ([#20](https://github.com/mmartofel/rhacm-multi-cluster-scalability/issues/20)) and a ledger batch written twice across an interconnect break ([#21](https://github.com/mmartofel/rhacm-multi-cluster-scalability/issues/21)). The `smoke`, `autoscale`, `chaos` and `logs` stages pass. Lines marked `FINDING (report only)` never fail a run.
+All five stages are expected to pass. Lines marked `FINDING (report only)` never fail a run — for example a few messages handled more than once after a rebalance, which is harmless because balance updates and ledger writes are idempotent on the transaction id.
 
 Other useful checks:
 
