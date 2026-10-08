@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - During an interconnect outage cloud processors wait and commit after restore; cloud
   `transactions-raw` lag grows instead of the DLQ.
+- `transactions-raw` and `transactions-committed` are retained for 6 h (was 2 h) so a
+  backlog built during an outage or overload is not deleted before it is processed;
+  `transactions-committed` size cap raised to 512 MB per partition.
 - `smoke-test.sh` and `acceptance-test.sh` require zero DLQ messages; `sent to DLQ` is a
   `log-scan` signature.
 

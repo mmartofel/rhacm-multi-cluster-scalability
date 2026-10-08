@@ -9,7 +9,7 @@ spec:
   partitions: 24
   replicas: 3
   config:
-    retention.ms: "7200000"
+    retention.ms: "21600000"
     retention.bytes: "134217728"
     segment.bytes: "33554432"
     min.insync.replicas: "2"
@@ -25,8 +25,8 @@ spec:
   partitions: 3
   replicas: 3
   config:
-    retention.ms: "7200000"
-    retention.bytes: "262144000"
+    retention.ms: "21600000"
+    retention.bytes: "536870912"
     segment.bytes: "67108864"
     min.insync.replicas: "2"
 ---
