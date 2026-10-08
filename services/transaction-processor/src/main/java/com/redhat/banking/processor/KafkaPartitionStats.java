@@ -151,6 +151,18 @@ public class KafkaPartitionStats {
             }
         }
 
+        // A topic with no consumer (the DLQ) reports what it currently holds: end offset
+        // minus earliest offset. The end offset alone counts every message ever written and
+        // never goes down, not even after the topic is purged or retention deletes records.
+        Map<TopicPartition, OffsetSpec> earliestSpecs = new HashMap<>();
+        for (TopicConfig tc : TOPICS) {
+            if (tc.consumerGroup == null) {
+                for (int p = 0; p < tc.partitions; p++) {
+                    earliestSpecs.put(new TopicPartition(tc.topic, p), OffsetSpec.earliest());
+                }
+            }
+        }
+
         List<String> groups = TOPICS.stream()
                 .map(tc -> tc.consumerGroup)
                 .filter(g -> g != null)
@@ -159,6 +171,7 @@ public class KafkaPartitionStats {
 
         // Launch every AdminClient call concurrently before awaiting any of them.
         var endOffsetsFuture = adminClient.listOffsets(latestSpecs).all();
+        var earliestOffsetsFuture = adminClient.listOffsets(earliestSpecs).all();
         Map<String, KafkaFuture<Map<TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata>>> committedFutures = new HashMap<>();
         for (String group : groups) {
             committedFutures.put(group, adminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata());
@@ -171,6 +184,8 @@ public class KafkaPartitionStats {
 
         Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets =
                 endOffsetsFuture.get(2, TimeUnit.SECONDS);
+        Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestOffsets =
+                earliestOffsetsFuture.get(2, TimeUnit.SECONDS);
 
         Map<String, Map<TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata>> committedByGroup = new HashMap<>();
         for (var entry : committedFutures.entrySet()) {
@@ -213,7 +228,8 @@ public class KafkaPartitionStats {
                 long endOffset = endOffsets.containsKey(tp) ? endOffsets.get(tp).offset() : 0L;
                 var committed = committedResult.get(tp);
                 long committedOffset = committed != null ? committed.offset() : 0L;
-                long lag = hasConsumer ? Math.max(0, endOffset - committedOffset) : endOffset;
+                long earliestOffset = earliestOffsets.containsKey(tp) ? earliestOffsets.get(tp).offset() : 0L;
+                long lag = Math.max(0, endOffset - (hasConsumer ? committedOffset : earliestOffset));
 
                 boolean partitionOwned = tc.partitionSplit ? owned.contains(p) : true;
 

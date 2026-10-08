@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Kafka Load showed `transactions-dlq` as holding every message ever written: for a topic
+  without a consumer the processor reported the end offset. It now reports what the topic
+  currently holds (end offset minus earliest offset), so a purge or retention shows up.
+
 ## [1.2.1] - 2026-10-08
 
 Zero-DLQ release: under two-cluster load and through an interconnect outage nothing is
