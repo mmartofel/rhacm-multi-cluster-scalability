@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 import org.eclipse.microprofile.health.Liveness;
 
 // Deliberately narrow and separate from SmallRye Reactive Messaging's own built-in
@@ -19,16 +20,29 @@ public class KafkaConsumerLivenessCheck implements HealthCheck {
     @Inject
     KafkaConsumerHealthState healthState;
 
+    @Inject
+    KafkaConsumerPollMonitor pollMonitor;
+
     @Override
     public HealthCheckResponse call() {
-        if (healthState.isHealthy()) {
-            return HealthCheckResponse.up("kafka-consumer-channel");
-        }
-        return HealthCheckResponse.builder()
+        HealthCheckResponseBuilder response = HealthCheckResponse.builder()
                 .name("kafka-consumer-channel")
-                .down()
-                .withData("channel", healthState.getFailedChannel())
-                .withData("reason", healthState.getFailureReason())
-                .build();
+                .withData("assignedPartitions", pollMonitor.getAssignedPartitions())
+                .withData("secondsSinceLastPoll", pollMonitor.secondsSinceLastPoll());
+        if (!healthState.isHealthy()) {
+            return response.down()
+                    .withData("channel", healthState.getFailedChannel())
+                    .withData("reason", healthState.getFailureReason())
+                    .build();
+        }
+        // Any other fatal channel failure closes the consumer without going through
+        // healthState — see KafkaConsumerPollMonitor.
+        if (pollMonitor.isStale()) {
+            return response.down()
+                    .withData("reason", "consumer polling thread unresponsive for "
+                            + pollMonitor.secondsSinceLastPoll() + "s")
+                    .build();
+        }
+        return response.up().build();
     }
 }

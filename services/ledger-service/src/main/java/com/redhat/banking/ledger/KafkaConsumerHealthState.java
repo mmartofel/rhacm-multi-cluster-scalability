@@ -9,6 +9,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 // briefly unreachable through the RHSI tunnel) even though the Kafka client reconnects
 // on its own once the outage clears, causing restart storms for no benefit.
 //
+// (A consumer that dies WITHOUT going through this state — any fatal channel failure our
+// own retry code never sees — is caught separately by KafkaConsumerPollMonitor.)
+//
 // This state is set ONLY by RetryingAvroDeserializationFailureHandler, and only after
 // it has already retried deserialization with backoff for several minutes — i.e. only
 // for a genuine permanent fail-stop of the consumer channel (confirmed live: without a
