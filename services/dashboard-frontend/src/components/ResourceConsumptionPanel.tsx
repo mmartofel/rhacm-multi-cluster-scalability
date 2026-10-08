@@ -237,7 +237,7 @@ function TrendCard({ history }: { history: ResourcePoint[] }) {
     <div style={{ background: '#1b1d21', border: '1px solid #2a2d32', borderRadius: 8, padding: '10px 8px 4px', flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 6px', gap: 12, flexWrap: 'wrap', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 13, marginRight: 4 }}>Trend</span>
+          <span style={{ color: '#f0f0f0', fontWeight: 600, fontSize: 13, marginRight: 4 }}>Trend <span style={{ color: '#6a6e73', fontWeight: 400, fontSize: 11 }}>({metric.unit})</span></span>
           {NAMESPACES.map(ns => <Chip key={ns} active={ns === namespace} onClick={() => setNamespace(ns)}>{ns}</Chip>)}
           <span style={{ width: 1, height: 14, background: '#2a2d32' }} />
           {METRICS.map(m => <Chip key={m.id} active={m.id === metricId} onClick={() => setMetricId(m.id)}>{m.label}</Chip>)}
@@ -277,7 +277,7 @@ function TrendCard({ history }: { history: ResourcePoint[] }) {
                 tickCount={6}
                 style={DARK_AXIS}
               />
-              <ChartAxis dependentAxis tickFormat={(t: number) => fmt(t)} label={metric.unit} style={{ ...DARK_AXIS, axisLabel: { fill: '#6a6e73', fontSize: 10, padding: 38 } }} />
+              <ChartAxis dependentAxis tickFormat={(t: number) => fmt(t)} style={DARK_AXIS} />
               <ChartGroup>
                 {lines.filter(l => l.reserved.length > 0).map(l => (
                   <ChartLine key={`${l.id}-reserved`} data={l.reserved} style={{ data: { stroke: l.color, strokeWidth: 2 } }} />
