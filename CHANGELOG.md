@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ResourceQuota` and `LimitRange` for `banking-demo` and `banking-infra` on both
+  clusters (`infra/namespaces/`), applied by `bootstrap-phase0.sh`; `smoke-test.sh`
+  fails if a quota is missing or is refusing pods (#23).
+- Explicit requests/limits for Kafka brokers, controllers and operators, MirrorMaker 2,
+  PostgreSQL, pgBackRest and PgBouncer (#23).
+- `KafkaConsumerPollMonitor` in `ledger-service` and `transaction-processor`: liveness
+  now detects a Kafka consumer that was closed by a fatal channel failure nothing else
+  reported, and the pod is restarted (#24).
+- Startup probe for `apicurio-registry` (#23).
+
+### Changed
+
+- Startup probes of the JVM services use `/health/started` instead of `/health/ready`,
+  so a pod created while the database is unreachable is no longer killed in a loop (#23).
+- Every readiness and liveness probe has an explicit 3 s timeout (#23).
+- `transaction-generator` liveness no longer depends on Kafka channel health; readiness
+  uses a dedicated `kafka-topic` check (#23).
+
 ## [1.0.0] - 2026-09-07
 
 First stable baseline of the multi-cluster banking transaction demo platform, spanning

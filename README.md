@@ -185,6 +185,24 @@ oc --context onprem annotate application.argoproj.io <app-name> -n openshift-git
 # e.g. <app-name> = banking-kafka-onprem, banking-mirrormaker2, banking-demo-transaction-processor-cloud, ...
 ```
 
+## Health probes
+
+Every application pod has a startup, readiness and liveness probe (`app-services/*/base/deployment.yaml`). Health endpoints are under `/health` (`/health/started`, `/health/ready`, `/health/live`), not Quarkus's default `/q/health`.
+
+| Service | Readiness checks | Liveness checks |
+|---|---|---|
+| `account-service` | database | process only |
+| `ledger-service`, `transaction-processor` | database | `kafka-consumer-channel` |
+| `transaction-generator` | `kafka-topic` | process only |
+| `cluster-gateway`, `dashboard-backend` | process only (on purpose — they must stay reachable during an outage) | process only |
+
+`kafka-consumer-channel` goes DOWN, and the pod is restarted, when the Kafka consumer is permanently dead: either a retry budget (4 minutes) was exhausted, or the consumer's polling thread has not answered for `kafka.consumer.liveness.stale-after` (6 minutes). It does not react to an idle topic, a rebalance, or an outage shorter than that.
+
+```bash
+# What a pod's liveness currently reports (assigned partitions, seconds since the consumer last answered)
+oc --context cloud exec -n banking-demo deploy/ledger-service -- curl -s localhost:8080/health/live
+```
+
 ## Namespace resource limits
 
 `banking-demo` and `banking-infra` each have a `ResourceQuota` (total CPU/memory requests and limits, pod count; plus PVC count and storage in `banking-infra`) and a `LimitRange` with default requests/limits for containers that set none. The sizing calculation is in a comment at the top of each file in `infra/namespaces/`.
