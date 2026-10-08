@@ -117,32 +117,37 @@ public class AccountResource {
         List<?> rows = query.getResultList();
 
         if (rows.isEmpty()) {
-            Account check = Account.findById(accountId);
-            if (check == null) {
+            // Nothing was updated. ONE follow-up query fetches the account's current state
+            // and whether this transaction id was already applied — on cloud every extra
+            // round trip here is paid on most messages, since version conflicts are the
+            // common case when several processors update the same accounts.
+            List<?> state = Account.getEntityManager()
+                    .createNativeQuery(txId != null
+                            ? "SELECT a.balance, a.version, (SELECT t.balance_after FROM transactions t "
+                                    + "WHERE t.transaction_id = :txId) FROM accounts a WHERE a.account_id = :id"
+                            : "SELECT a.balance, a.version, CAST(NULL AS numeric) FROM accounts a WHERE a.account_id = :id")
+                    .setParameter("id", accountId)
+                    .setParameter(txId != null ? "txId" : "id", txId != null ? txId : accountId)
+                    .getResultList();
+            if (state.isEmpty()) {
                 return Response.status(Response.Status.NOT_FOUND)
                         .entity(Map.of("success", false, "reason", "account not found")).build();
             }
+            Object[] current = (Object[]) state.get(0);
+            BigDecimal currentBalance = (BigDecimal) current[0];
+            long currentVersion = ((Number) current[1]).longValue();
             // A repeat of an already-applied transaction can land here too (stale version,
             // or funds since spent) — it is still a duplicate, not a rejection.
-            BigDecimal alreadyApplied = txId == null ? null : storedBalanceAfter(txId);
-            if (alreadyApplied != null) {
-                return duplicate(accountId, alreadyApplied, check.version);
+            if (current[2] != null) {
+                return duplicate(accountId, (BigDecimal) current[2], currentVersion);
             }
-            if (versionParam != null && check.version != versionParam.longValue()) {
-                return Response.ok(Map.of(
-                        "accountId", accountId,
-                        "newBalance", check.balance,
-                        "version",   check.version,
-                        "success",   false,
-                        "reason",    "version conflict"
-                )).build();
-            }
+            boolean versionConflict = versionParam != null && currentVersion != versionParam;
             return Response.ok(Map.of(
                     "accountId", accountId,
-                    "newBalance", check.balance,
-                    "version",   check.version,
+                    "newBalance", currentBalance,
+                    "version",   currentVersion,
                     "success",   false,
-                    "reason",    "insufficient funds"
+                    "reason",    versionConflict ? "version conflict" : "insufficient funds"
             )).build();
         }
 
