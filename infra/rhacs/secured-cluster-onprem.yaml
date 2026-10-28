@@ -14,3 +14,14 @@ metadata:
 spec:
   clusterName: onprem
   centralEndpoint: "central.stackrox.svc.cluster.local:443"
+  # The operator default (2 CPU / 4Gi request) cannot be scheduled on onprem,
+  # whose workers are already ~95% CPU-requested by Central, RHACM, GitOps and
+  # the banking stack. Actual Sensor usage on a cluster this size is far lower.
+  sensor:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
